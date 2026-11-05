@@ -178,6 +178,7 @@ final class LingClient: ObservableObject {
     var hideKey = false
     @Published private(set) var genaiBridgeAvailable = true
     @Published private(set) var vibeVoiceAvailable = true
+    var ttsEngineMode: String = UserDefaults.standard.string(forKey: "ttsEngine") ?? "vibevoice-auto"
 
     /// Tests swap in a session with a stub protocol.
     var session: URLSession = .shared
@@ -492,14 +493,14 @@ final class LingClient: ObservableObject {
                     if firstAudio == nil { firstAudio = Date().timeIntervalSince(started) }
                     cont.yield(pcm)
                 }
-                if self.vibeVoiceAvailable, let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
+                if self.vibeVoiceAvailable, self.ttsEngineMode != "gemini", let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
                     let vvCall = CallLabel(provider: "vibevoice", model: reference != nil ? "VibeVoice-7B" : "VibeVoice", role: "voice")
                     var vvReq = URLRequest(url: vvURL)
                     vvReq.httpMethod = "POST"
                     vvReq.timeoutInterval = 30
                     vvReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     var vvBody: [String: Any] = [
-                        "model": reference != nil ? "VibeVoice-7B" : "VibeVoice-Realtime-0.5B",
+                        "model": (reference != nil || self.ttsEngineMode == "vibevoice-7b") ? "VibeVoice-7B" : "VibeVoice-Realtime-0.5B",
                         "input": text,
                         "response_format": "pcm",
                         "sample_rate": 24000,

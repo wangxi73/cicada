@@ -195,9 +195,9 @@ struct AISettingsView: View {
         usageRow(L("翻译"), tag: on ? uses : "Google", style: on ? .ok : .off,
                  note: on ? (Recognition.hasOnDeviceTranslation ? L("整句用它；不行时换 Google、本机") : L("整句用它；不行时换 Google"))
                           : L("没有 key 时照常可用"))
-        usageRow(L("同传声音"), tag: ling.speaks ? uses : L("本机"), style: ling.speaks ? .ok : .off, note: voiceNote)
-        if provider.clones {
-            usageRow(L("你自己的声音"), tag: on ? uses : L("需要 key"), style: on ? .ok : .off, note: L("录一段，让对方听到你的音色"))
+        usageRow(L("同传声音"), tag: ling.vibeVoiceAvailable ? "用 VibeVoice (本机)" : (ling.speaks ? uses : L("本机")), style: (ling.vibeVoiceAvailable || ling.speaks) ? .ok : .off, note: ling.vibeVoiceAvailable ? "Apple M5 Max 本地 24kHz 实时流式合成" : voiceNote)
+        if ling.clones {
+            usageRow(L("你自己的声音"), tag: ling.vibeVoiceAvailable ? "用 VibeVoice 7B" : (on ? uses : L("需要 key")), style: .ok, note: L("录一段，让对方听到你的音色"))
         } else {
             usageRow(L("你自己的声音"), tag: L("只有 Ling"), style: .ling, note: L("换用 Ling 才有"))
         }

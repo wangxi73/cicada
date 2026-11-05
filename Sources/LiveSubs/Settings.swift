@@ -65,6 +65,9 @@ final class AppSettings: ObservableObject {
     @Published var listenMic: Bool {
         didSet { save() }
     }
+    @Published var ttsEngine: String {
+        didSet { save() }
+    }
     /// Imported files: the language they are in ("auto" or a locale), and whether notes are written
     /// once one is transcribed.
     @Published var importLanguage: String {
@@ -211,6 +214,7 @@ final class AppSettings: ObservableObject {
         savedSystemInput = defaults.string(forKey: "savedSystemInput") ?? ""
         recordAudio = defaults.object(forKey: "recordAudio") as? Bool ?? true
         listenMic = defaults.object(forKey: "listenMic") as? Bool ?? true
+        ttsEngine = defaults.string(forKey: "ttsEngine") ?? "vibevoice-auto"
         importLanguage = defaults.string(forKey: "importLanguage") ?? "auto"
         importNotes = defaults.object(forKey: "importNotes") as? Bool ?? true
         overlayAuto = defaults.object(forKey: "overlayAuto") as? Bool ?? true
@@ -261,6 +265,7 @@ final class AppSettings: ObservableObject {
         defaults.set(savedSystemInput, forKey: "savedSystemInput")
         defaults.set(recordAudio, forKey: "recordAudio")
         defaults.set(listenMic, forKey: "listenMic")
+        defaults.set(ttsEngine, forKey: "ttsEngine")
         defaults.set(importLanguage, forKey: "importLanguage")
         defaults.set(importNotes, forKey: "importNotes")
         defaults.set(overlayAuto, forKey: "overlayAuto")
