@@ -28,9 +28,12 @@ struct LanguageSettings: View {
                 }
             }
             group(L("纪要")) {
-                SettingsRow(title: L("纪要语言"), detail: L("实时纪要和完整版同一种语言"), divider: false) {
-                    Segments(options: [("mine", L("我的语言 · \(targetName(settings.myLanguage))")), ("source", sourceTitle)],
-                             value: settings.notesLanguage) { model.setNotesLanguage($0) }
+                SettingsRow(title: L("纪要语言"), detail: L("实时纪要和完整版同一种语言，切换后立即重写"), divider: false) {
+                    PillMenu(
+                        value: targetName(model.notesLanguageCode(model.store.liveID ?? model.notes.shownID ?? "")),
+                        options: [("mine", L("跟随翻译语言（\(targetName(settings.myLanguage))）")), ("source", sourceTitle)]
+                            + targetLanguages.map { ($0.code, $0.name) }
+                    ) { model.setNotesLanguage($0) }
                 }
             }
             group(L("同声传译")) {

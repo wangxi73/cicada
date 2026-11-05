@@ -276,6 +276,65 @@ struct NotesWindowView: View {
                     Text(live || session == nil ? L("实时纪要") : L("会议纪要")).font(.system(size: 24, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     Spacer(minLength: 8)
+                    Button { model.setListenMic(!settings.listenMic) } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: settings.listenMic ? "mic.fill" : "mic.slash")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(settings.listenMic ? Palette.accent : Palette.tertiary)
+                            Text(settings.listenMic ? "现场人声" : "仅电脑声")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(settings.listenMic ? Palette.ink : Palette.secondary)
+                        }
+                        .padding(.horizontal, 8).frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(settings.listenMic ? Palette.accentPale : Palette.fill))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(settings.listenMic ? Palette.accent.opacity(0.4) : Palette.line, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).padding(.trailing, 2)
+                    Menu {
+                        let sid = store.liveID ?? engine.shownID ?? ""
+                        Button("跟随翻译语言（\(targetName(settings.myLanguage))）") { model.setNotesLanguage("mine") }
+                        Button("跟随会议原文") { model.setNotesLanguage("source") }
+                        Divider()
+                        ForEach(targetLanguages, id: \.code) { lang in
+                            Button(lang.name) {
+                                if store.liveID != nil {
+                                    model.setNotesLanguage(lang.code)
+                                } else if !sid.isEmpty {
+                                    model.regenerateNotes(sid, choice: lang.code)
+                                } else {
+                                    model.setNotesLanguage(lang.code)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
+                            Text("纪要: " + targetName(model.notesLanguageCode(store.liveID ?? engine.shownID ?? "")))
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Palette.tertiary)
+                        }
+                        .padding(.horizontal, 8).frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(Palette.fill))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Palette.line, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).padding(.trailing, 2)
+                    if heard > 0 {
+                        Button {
+                            if store.liveID != nil { engine.updateNow() } else if let sid = engine.shownID { engine.generate(for: sid) }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.accent)
+                                Text(engine.state == .updating ? "生成中…" : "生成纪要").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink)
+                            }
+                            .padding(.horizontal, 8).frame(height: 28)
+                            .background(RoundedRectangle(cornerRadius: 7).fill(Palette.accentPale))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Palette.accent.opacity(0.4), lineWidth: 1))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).disabled(engine.state == .updating).padding(.trailing, 2)
+                    }
                     if live {
                         Button(action: askToEnd) {
                             Text("结束").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
@@ -490,9 +549,13 @@ struct NotesWindowView: View {
                          value: model.subtitles, fill: true) { model.setSubtitles($0, meetingOnly: true) }
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("纪要").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.secondary)
-                Segments(options: [("mine", targetName(mine)), ("source", source.map { L("\(targetName($0))（原文）") } ?? L("会议原文"))],
-                         value: model.notesChoice(id), fill: true) { model.setNotesLanguage($0, meetingOnly: true) }
+                Text("纪要语言").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.secondary)
+                PillMenu(
+                    value: targetName(model.notesLanguageCode(id)),
+                    options: [("mine", L("跟随翻译（\(targetName(mine))）")),
+                              ("source", source.map { L("\(targetName($0))（原文）") } ?? L("会议原文"))]
+                        + targetLanguages.map { ($0.code, $0.name) }
+                ) { model.setNotesLanguage($0, meetingOnly: true) }
                 Text("换了以后会马上用新语言重写纪要").font(.system(size: 12)).foregroundStyle(Palette.tertiary)
             }
             Button("打开语言设置") {

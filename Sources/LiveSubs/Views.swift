@@ -201,11 +201,39 @@ struct MenuPanelView: View {
                 }
                 ChoiceRow(label: L("翻译成"),
                           value: targetName(model.listen.resolvedTarget),
-                          // "Follow system" leaves no room for the language name in the panel.
                           badge: settings.target == "system" ? (uiIsChinese ? L("跟随系统") : L("系统")) : nil,
                           compact: true, options: targetOptions) {
                     model.targetSelection = $0
                 }
+                ChoiceRow(
+                    label: L("纪要"),
+                    value: targetName(model.notesLanguageCode(model.store.liveID ?? model.notes.shownID ?? "")),
+                    badge: settings.notesLanguage == "mine" ? L("跟随译文") : (settings.notesLanguage == "source" ? L("跟随原文") : nil),
+                    compact: true,
+                    options: [("mine", L("跟随翻译语言（\(targetName(settings.myLanguage))）")), ("source", L("跟随会议原文"))]
+                        + targetLanguages.map { ($0.code, $0.name) }
+                ) {
+                    model.setNotesLanguage($0)
+                }
+                HStack(spacing: 10) {
+                    Image(systemName: settings.listenMic ? "mic.fill" : "mic.slash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(settings.listenMic ? Palette.accent : Palette.tertiary)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("现场人声（麦克风）")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Palette.ink)
+                        Text(settings.listenMic ? "已开启 · 同时收录麦克风与电脑声音" : "已关闭 · 仅收录电脑程序声音")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { settings.listenMic }, set: { model.setListenMic($0) }))
+                        .toggleStyle(.switch).labelsHidden().tint(Palette.ink)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 11).fill(Palette.ground))
             }
 
             Divider()

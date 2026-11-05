@@ -27,6 +27,7 @@ final class ListenEngine {
     /// A finished sentence; `secondsAgo` ≈ how long ago it started.
     var onFinal: ((Segment, _ secondsAgo: Double) -> Void)?
     var onTranslated: ((_ segmentID: Int, _ translation: String) -> Void)?
+    var onSourceRefined: ((_ segmentID: Int, _ refinedText: String) -> Void)?
     /// Diagnostics: how long a sentence took from its last new words to its translation on screen.
     var onTiming: ((SentenceTiming) -> Void)?
 
@@ -63,6 +64,7 @@ final class ListenEngine {
     private var askShown = false
 
     private var audioTap: AudioSource?
+    private var ambientMicEngine: AVAudioEngine?
     /// 会议室: the microphone Cicada listens to the room with; nil leaves the input on its default.
     var roomDevice: (() -> OutputDevice?)?
     /// The Mac reading a translation aloud, or the talk key held: the room mic hears silence then.
@@ -306,6 +308,7 @@ final class ListenEngine {
         tickTimer = nil
         audioTap?.stop()
         audioTap = nil
+        stopAmbientMic()
         router.reset()
         resultsTask?.cancel()
         resultsTask = nil
@@ -351,6 +354,7 @@ final class ListenEngine {
             try tap.start()
             audioTap = tap
             debugLog("audio tap started, permission \(SystemAudioPermission.status().map { "\($0)" } ?? "unreadable")")
+            syncAmbientMic()
             return true
         } catch {
             debugLog("audio tap start failed: \(error)")
@@ -413,7 +417,58 @@ final class ListenEngine {
         guard on != roomMuted else { return }
         roomMuted = on
         (audioTap as? RoomMic)?.muted = on
+        if on { router.clearMic() }
         if settings.listensToRoom { debugLog("room mic \(on ? "muted" : "open")") }
+    }
+
+    func syncAmbientMic() {
+        guard (isRunning || audioTap != nil), !settings.listensToRoom, settings.listenMic else {
+            stopAmbientMic()
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            startAmbientMicTap()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] ok in
+                guard ok else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.syncAmbientMic() }
+                }
+            }
+        default:
+            stopAmbientMic()
+        }
+    }
+
+    private func startAmbientMicTap() {
+        stopAmbientMic()
+        let engine = AVAudioEngine()
+        AudioDevices.pinInput(engine, to: roomDevice?())
+        let inputNode = engine.inputNode
+        let inFormat = inputNode.outputFormat(forBus: 0)
+        guard inFormat.sampleRate > 0, inFormat.channelCount > 0 else { return }
+        let router = self.router
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inFormat) { [weak self] buf, _ in
+            guard let self, !self.roomMuted else { return }
+            router.pushMic(buf)
+        }
+        do {
+            try engine.start()
+            ambientMicEngine = engine
+            debugLog("ambient mic started (\(AudioDevices.inputDevice(of: engine)))")
+        } catch {
+            inputNode.removeTap(onBus: 0)
+        }
+    }
+
+    private func stopAmbientMic() {
+        if let engine = ambientMicEngine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+        }
+        ambientMicEngine = nil
+        router.clearMic()
     }
 
     /// 听哪里 changed: while listening, the new source takes over in the same meeting.
@@ -1022,8 +1077,15 @@ final class ListenEngine {
                 }
                 return
             }
+            let refined = self.translator?.refinedSourceByText.removeValue(forKey: seg.text)
             if let idx = self.segments.firstIndex(where: { $0.id == id }) {
+                if let refined, !refined.isEmpty {
+                    self.segments[idx].text = refined
+                }
                 self.segments[idx].translation = out
+            }
+            if let refined, !refined.isEmpty, refined != seg.text {
+                self.onSourceRefined?(id, refined)
             }
             contentLog("TRANSLATE [\(seg.sourceCode)→\(target)] \(seg.text) => \(out)")
             self.onTranslated?(id, out)

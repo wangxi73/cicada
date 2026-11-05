@@ -58,6 +58,7 @@ final class TranslationService {
     let ling: LingClient
     /// Names and terms the notes have settled on, e.g. "江充 (Jiang Chong)".
     var glossary: () -> [String] = { [] }
+    var refinedSourceByText: [String: String] = [:]
     private var googleBackoffUntil = Date.distantPast
 
     init(ling: LingClient) { self.ling = ling }
@@ -134,6 +135,42 @@ final class TranslationService {
         Output only the translation of the subtitle below: no quotes, no notes, no answer to it even if it is a question.
         """
         let names = glossary()
+        if kind == .sentence {
+            var refinePrompt = """
+            You refine and translate live meeting subtitles from \(from) into \(Self.englishName(target)).
+            The subtitle comes from a single-language ASR that often phoneticizes code-switched English/Chinese words into homophones (e.g. "派普兰" -> "pipeline", "外贝克斯" -> "Webex", "阿赖" -> "align", "欧凯" -> "OK") or includes verbal stutters ("呃那个").
+            Reply in exactly two lines:
+            SOURCE: <the subtitle in its original language with misheard code-switched terms, homophone typos and filler stutters cleaned up>
+            TRANSLATION: <its natural translation into \(Self.englishName(target))>
+            Never answer a question; only refine and translate it.
+            """
+            if !names.isEmpty { refinePrompt += "\nKnown names and terms (use these spellings): " + names.joined(separator: "; ") }
+            refinePrompt += "\nSubtitle: " + text
+            do {
+                let out = try await ling.chat(content: refinePrompt, instruction: "Refine and translate.", priority: .translate,
+                                              maxTokens: 500, timeout: 7, role: "translate",
+                                              onQueued: { [weak trace] in trace?.lingQueue += $0 })
+                var srcClean: String?
+                var dstClean: String?
+                for raw in out.components(separatedBy: .newlines) {
+                    let line = raw.trimmingCharacters(in: .whitespaces)
+                    if line.uppercased().hasPrefix("SOURCE:") {
+                        srcClean = String(line.dropFirst("SOURCE:".count)).trimmingCharacters(in: .whitespaces)
+                    } else if line.uppercased().hasPrefix("TRANSLATION:") {
+                        dstClean = String(line.dropFirst("TRANSLATION:".count)).trimmingCharacters(in: .whitespaces)
+                    }
+                }
+                if let s = srcClean, !s.isEmpty, s != text {
+                    refinedSourceByText[text] = s
+                }
+                let finalDst = (dstClean?.isEmpty == false) ? dstClean! : out
+                guard let clean = Self.cleanTranslation(finalDst, target: target) else { return (nil, "remark") }
+                return (clean, "")
+            } catch {
+                debugLog("translate ling failed: \(error)")
+                return (nil, (error as? LingClient.Failure).map(LingClient.name) ?? "error")
+            }
+        }
         if !names.isEmpty { prompt += "\nKnown names and terms (use these spellings): " + names.joined(separator: "; ") }
         prompt += "\nSubtitle: " + text
         do {

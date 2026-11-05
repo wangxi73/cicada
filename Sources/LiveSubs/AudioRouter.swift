@@ -21,6 +21,10 @@ final class AudioRouter: @unchecked Sendable {
 
     private let queue = DispatchQueue(label: "com.wquguru.cicada.audio", qos: .userInitiated)
     private let converter = PCMConverter()
+    private let micConverter = PCMConverter()
+    private let micFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false)!
+    private var micSamples: [Float] = []
+    private var lastSystemPushAt: TimeInterval = 0
     private var format: AVAudioFormat?
     private var sink: RecognitionStream?
     private var ring: [(buffer: AVAudioPCMBuffer, seconds: Double, voiced: Bool)] = []
@@ -95,12 +99,50 @@ final class AudioRouter: @unchecked Sendable {
     }
 
     func push(_ mono: AVAudioPCMBuffer) {
-        queue.async { [self] in process(mono) }
+        queue.async { [self] in
+            lastSystemPushAt = ProcessInfo.processInfo.systemUptime
+            process(mono)
+        }
+    }
+
+    func pushMic(_ buf: AVAudioPCMBuffer) {
+        queue.async { [self] in
+            guard let c = micConverter.convert(buf, to: micFormat),
+                  let d = c.floatChannelData, c.frameLength > 0 else { return }
+            let n = Int(c.frameLength)
+            for i in 0..<n {
+                let amplified = d[0][i] * 2.0
+                d[0][i] = max(-1.0, min(1.0, amplified))
+            }
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastSystemPushAt > 0.15 {
+                micSamples.removeAll()
+                process(c)
+            } else {
+                micSamples.append(contentsOf: UnsafeBufferPointer(start: d[0], count: n))
+                let maxSamples = 9_600
+                if micSamples.count > maxSamples {
+                    micSamples.removeFirst(micSamples.count - maxSamples)
+                }
+            }
+        }
+    }
+
+    func clearMic() {
+        queue.async { [self] in micSamples.removeAll() }
     }
 
     private func process(_ mono: AVAudioPCMBuffer) {
         let n = Int(mono.frameLength)
         guard n > 0, let data = mono.floatChannelData else { return }
+        if !micSamples.isEmpty {
+            let mCount = min(n, micSamples.count)
+            for i in 0..<mCount {
+                let mixed = data[0][i] + micSamples[i]
+                data[0][i] = max(-1.0, min(1.0, mixed))
+            }
+            micSamples.removeFirst(mCount)
+        }
         var sum: Float = 0
         for i in 0..<n { sum += data[0][i] * data[0][i] }
         let rms = (sum / Float(n)).squareRoot()

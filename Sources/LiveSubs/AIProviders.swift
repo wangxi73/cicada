@@ -41,7 +41,7 @@ struct AIProvider: Identifiable, Equatable {
     static let ling = AIProvider(
         id: .ling, name: "Ling", base: URL(string: "https://api.ant-ling.com/v1/"),
         site: URL(string: "https://chat.ant-ling.com/platform/api"),
-        textModels: [Model(id: "Ling-3.1-flash", note: L("更准")), Model(id: "Ling-3.0-flash", note: L("更快、更省"))],
+        textModels: [Model(id: "gemini-3.8-flash", note: "Apple GenAI · 极速"), Model(id: "gemini-3.7-flash", note: "Apple GenAI"), Model(id: "Ling-3.1-flash", note: L("更准")), Model(id: "Ling-3.0-flash", note: L("更快、更省"))],
         voiceModels: [Model(id: "Ming-3.0-tts-0.5B", note: "")], voices: [],
         clones: true, hearsAudio: true, spacing: 0.6)
 

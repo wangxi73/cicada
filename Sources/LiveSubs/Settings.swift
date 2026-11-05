@@ -62,6 +62,9 @@ final class AppSettings: ObservableObject {
     @Published var recordAudio: Bool {
         didSet { save() }
     }
+    @Published var listenMic: Bool {
+        didSet { save() }
+    }
     /// Imported files: the language they are in ("auto" or a locale), and whether notes are written
     /// once one is transcribed.
     @Published var importLanguage: String {
@@ -207,13 +210,14 @@ final class AppSettings: ObservableObject {
         speakMic = defaults.string(forKey: "speakMic") ?? ""
         savedSystemInput = defaults.string(forKey: "savedSystemInput") ?? ""
         recordAudio = defaults.object(forKey: "recordAudio") as? Bool ?? true
+        listenMic = defaults.object(forKey: "listenMic") as? Bool ?? true
         importLanguage = defaults.string(forKey: "importLanguage") ?? "auto"
         importNotes = defaults.object(forKey: "importNotes") as? Bool ?? true
         overlayAuto = defaults.object(forKey: "overlayAuto") as? Bool ?? true
         overlayHideAfter = defaults.object(forKey: "overlayHideAfter") as? Double ?? 4
         talkKey = Shortcut(stored: defaults.string(forKey: "talkKey")) ?? .defaultTalk
         toggleKey = Shortcut(stored: defaults.string(forKey: "toggleKey")) ?? .defaultToggle
-        aiModel = defaults.string(forKey: "aiModel") ?? "Ling-3.1-flash"
+        aiModel = defaults.string(forKey: "aiModel") ?? "gemini-3.8-flash"
         aiProvider = defaults.string(forKey: "aiProvider") ?? "ling"
         aiModels = defaults.dictionary(forKey: "aiModels") as? [String: String] ?? [:]
         aiVoiceModels = defaults.dictionary(forKey: "aiVoiceModels") as? [String: String] ?? [:]
@@ -256,6 +260,7 @@ final class AppSettings: ObservableObject {
         defaults.set(speakMic, forKey: "speakMic")
         defaults.set(savedSystemInput, forKey: "savedSystemInput")
         defaults.set(recordAudio, forKey: "recordAudio")
+        defaults.set(listenMic, forKey: "listenMic")
         defaults.set(importLanguage, forKey: "importLanguage")
         defaults.set(importNotes, forKey: "importNotes")
         defaults.set(overlayAuto, forKey: "overlayAuto")

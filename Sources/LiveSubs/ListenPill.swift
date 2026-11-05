@@ -32,7 +32,7 @@ import SwiftUI
         let item = NSToolbarItem(itemIdentifier: id)
         let root: AnyView
         if id == Self.pill {
-            root = AnyView(ListenPill(model: model, store: model.store))
+            root = AnyView(ListenPill(model: model, store: model.store, settings: model.settings))
             item.label = L("开始听")
         } else {
             root = AnyView(
@@ -57,17 +57,21 @@ import SwiftUI
 struct ListenPill: View {
     @ObservedObject var model: AppModel
     @ObservedObject var store: SessionStore
+    @ObservedObject var settings: AppSettings
     @State private var endingTotal: Double = 30
 
     var body: some View {
-        Group {
-            if model.running, let p = model.ending {
-                ending(p)
-            } else if model.running {
-                listening
-            } else {
-                idle
+        HStack(spacing: 8) {
+            Group {
+                if model.running, let p = model.ending {
+                    ending(p)
+                } else if model.running {
+                    listening
+                } else {
+                    idle
+                }
             }
+            micToggleButton
         }
         .animation(.spring(duration: 0.35), value: model.running)
         .animation(.spring(duration: 0.35), value: model.ending)
@@ -75,9 +79,26 @@ struct ListenPill: View {
             if let p { endingTotal = max(1, p.deadline.timeIntervalSinceNow) }
         }
         .padding(.vertical, 2)
-        // A toolbar item keeps the width it was first laid out at: a fixed slot, wide enough for
-        // the longest state (the English countdown), with the pill centred in it.
-        .frame(width: 420)
+        .frame(width: 520)
+    }
+
+    private var micToggleButton: some View {
+        Button { model.setListenMic(!settings.listenMic) } label: {
+            HStack(spacing: 5) {
+                Image(systemName: settings.listenMic ? "mic.fill" : "mic.slash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(settings.listenMic ? Palette.accent : Palette.tertiary)
+                Text(settings.listenMic ? "现场人声: 开" : "现场人声: 关")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(settings.listenMic ? Palette.ink : Palette.secondary)
+            }
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(Capsule().fill(settings.listenMic ? Palette.accentPale : Color.white))
+            .overlay(Capsule().stroke(settings.listenMic ? Palette.accent.opacity(0.45) : Palette.line, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(settings.listenMic ? "正在同时收录现场麦克风人声与电脑声音（点击单独关闭现场人声）" : "当前仅收录电脑程序声音（点击开启现场麦克风人声）")
     }
 
     private var idle: some View {

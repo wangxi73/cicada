@@ -122,7 +122,7 @@ final class NotesEngine: ObservableObject {
     private var pendingRewrite: String?
     private var lastAttempt = Date.distantPast
     private var freshGeneration = 0
-    static let interval: TimeInterval = 45
+    static let interval: TimeInterval = 12
 
     init(ling: LingClient, store: SessionStore) {
         self.ling = ling
@@ -144,7 +144,7 @@ final class NotesEngine: ObservableObject {
         state = ling.hasKey ? .idle : .noKey
         lastAttempt = Date()
         timer?.invalidate()
-        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
         timer = t
@@ -205,7 +205,7 @@ final class NotesEngine: ObservableObject {
         guard let id = sessionID, !inFlight else { return }
         guard let s = store.session(id), s.lines.count > notes.covered else { return }
         // First notes as soon as there is something to say, then every 45 s.
-        let due = notes.isEmpty ? (s.lines.count >= 3 || Date().timeIntervalSince(lastAttempt) > 20)
+        let due = notes.isEmpty ? (s.lines.count >= 1 && Date().timeIntervalSince(lastAttempt) >= 2)
                                 : Date().timeIntervalSince(lastAttempt) >= Self.interval
         if due { Task { await update(id, final: false) } }
     }

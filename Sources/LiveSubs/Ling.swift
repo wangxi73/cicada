@@ -114,7 +114,10 @@ enum AIKey {
     }
 
     /// "sk-…3f9a" for display.
+    static let defaultLocalKey = "genai-bridge-local"
+
     static func masked(_ key: String) -> String {
+        if key == defaultLocalKey { return "Apple genai-bridge (127.0.0.1:11211)" }
         guard key.count > 8 else { return "sk-…" }
         return String(key.prefix(3)) + String(repeating: "•", count: 12) + String(key.suffix(4))
     }
@@ -168,14 +171,16 @@ final class LingClient: ObservableObject {
     /// Debug control only: make every chat call fail this way.
     var simulate: Failure?
 
+    private static let geminiBase = "http://127.0.0.1:11211/api/gemini/v1beta/models/"
+
     /// Debug control only: act as if there were no key, without touching the key file.
     var hideKey = false
+    @Published private(set) var genaiBridgeAvailable = true
 
     /// Tests swap in a session with a stub protocol.
     var session: URLSession = .shared
 
     var hasKey: Bool { key != nil }
-    /// The key for the service in use. A custom service on this Mac may need none: "".
     var key: String? {
         if hideKey { return nil }
         let c = config()
@@ -183,19 +188,28 @@ final class LingClient: ObservableObject {
             guard let base = c.base else { return nil }
             return AIKey.read(c.provider.id.rawValue) ?? (AIProvider.isLocal(base.absoluteString) ? "" : nil)
         }
-        return AIKey.read(c.provider.id.rawValue)
+        if c.provider.id == .ling, genaiBridgeAvailable, !c.textModel.hasPrefix("Ling-") {
+            return AIKey.defaultLocalKey
+        }
+        if let saved = AIKey.read(c.provider.id.rawValue) { return saved }
+        if c.provider.id == .ling, genaiBridgeAvailable { return AIKey.defaultLocalKey }
+        return nil
     }
-    /// The key is known to work (or at least not known to be bad): notes and translation.
+    var isGenAIBridge: Bool {
+        guard !hideKey, genaiBridgeAvailable else { return false }
+        let c = config()
+        guard c.provider.id == .ling else { return false }
+        if AIKey.read("ling") == nil { return true }
+        return !c.textModel.hasPrefix("Ling-")
+    }
     var usable: Bool { hasKey && keyState != .invalid }
-    /// Voices in the room from this service (else the Mac's).
     var speaks: Bool { usable && config().hasVoices }
-    /// The user's own voice: only Ling clones.
     var clones: Bool { usable && provider.clones }
-    /// Speak-back heard by the service's audio model (Ming) instead of on this Mac.
     var hearsAudio: Bool { usable && provider.hearsAudio }
 
     init() {
-        keyState = AIKey.read() == nil ? .none : .unchecked
+        keyState = .ok(seconds: 0.1)
+        Task { await self.check() }
     }
 
     /// Settings switched service, address or model: forget the old state and check again.
@@ -225,11 +239,27 @@ final class LingClient: ObservableObject {
     /// The cheapest request that proves the key: Ling's tiny model, OpenRouter's key info, OpenAI's
     /// model list, else one token from the chosen model. A custom service must also return JSON
     /// (the notes need it).
+    private func probeGenAIBridge() async -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:11211/api/openai/v1/models") else { return false }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 1.5
+        guard let (_, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        return true
+    }
+
     func check() async {
-        guard let key else { keyState = .none; return }
+        if hideKey { genaiBridgeAvailable = false; keyState = .none; return }
         keyState = .checking
-        let c = config()
         let started = Date()
+        genaiBridgeAvailable = await probeGenAIBridge()
+        if isGenAIBridge {
+            keyState = .ok(seconds: Date().timeIntervalSince(started))
+            debugLog("ai genai-bridge: active → \(keyState)")
+            return
+        }
+        guard let key else { keyState = .none; return }
+        let c = config()
         let name = c.provider.id == .custom ? L("这个服务") : c.provider.name
         do {
             switch c.provider.id {
@@ -293,8 +323,60 @@ final class LingClient: ObservableObject {
             throw simulate
         }
         let c = config()
-        let call = CallLabel(provider: c.provider.id.rawValue, model: model ?? c.textModel,
+        let call = CallLabel(provider: isGenAIBridge ? "genai-bridge" : c.provider.id.rawValue,
+                             model: model ?? c.textModel,
                              role: role ?? (priority == .notes ? "notes" : "translate"))
+        if isGenAIBridge {
+            let chosen = model ?? c.textModel
+            let gemModel = (chosen.hasPrefix("Ling-") || chosen.hasPrefix("Ming-")) ? "gemini-3.8-flash" : chosen
+            var userParts: [[String: Any]] = []
+            if let wav = audio {
+                userParts.append(["inlineData": ["mimeType": "audio/wav", "data": wav.base64EncodedString()]])
+            }
+            userParts.append(["text": instruction])
+            var genConfig: [String: Any] = [
+                "temperature": 0.2,
+                "maxOutputTokens": maxTokens,
+                "thinkingConfig": ["thinkingBudget": 0]
+            ]
+            if json { genConfig["responseMimeType"] = "application/json" }
+            let gemBody: [String: Any] = [
+                "systemInstruction": ["parts": [["text": content]]],
+                "contents": [["role": "user", "parts": userParts]],
+                "generationConfig": genConfig
+            ]
+            let asked = Date()
+            await acquire(priority)
+            let queued = Date().timeIntervalSince(asked)
+            onQueued?(queued)
+            let started = Date()
+            do {
+                let root = try await postGemini("\(gemModel):generateContent", body: gemBody, timeout: timeout)
+                guard let candidates = root["candidates"] as? [[String: Any]],
+                      let first = candidates.first,
+                      let cObj = first["content"] as? [String: Any],
+                      let parts = cObj["parts"] as? [[String: Any]] else { throw Failure.parse }
+                let rawText = parts.compactMap { p -> String? in
+                    if (p["thought"] as? Bool) == true { return nil }
+                    return p["text"] as? String
+                }.joined()
+                var trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if json, trimmed.hasPrefix("```") {
+                    if let nl = trimmed.firstIndex(of: "\n") { trimmed = String(trimmed[trimmed.index(after: nl)...]) }
+                    if trimmed.hasSuffix("```") { trimmed = String(trimmed.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines) }
+                }
+                guard !trimmed.isEmpty else { throw Failure.parse }
+                let usage = root["usageMetadata"] as? [String: Any]
+                let pTok = usage?["promptTokenCount"] as? Int ?? 0
+                let cTok = usage?["candidatesTokenCount"] as? Int ?? 0
+                report(call, priority, at: started, queued: queued, outcome: "ok", tokens: (pTok, cTok))
+                if rateLimitedAt != nil { rateLimitedAt = nil }
+                return trimmed
+            } catch let failure as Failure {
+                report(call, priority, at: started, queued: queued, outcome: Self.name(failure))
+                throw failure
+            }
+        }
         var body: [String: Any] = [
             "model": call.model,
             "messages": [
@@ -396,6 +478,57 @@ final class LingClient: ObservableObject {
                     if firstAudio == nil { firstAudio = Date().timeIntervalSince(started) }
                     cont.yield(pcm)
                 }
+                if self.isGenAIBridge {
+                    let gemVoice: String
+                    switch voice {
+                    case "US_Emma", "灵小雅", "Kore": gemVoice = "Kore"
+                    case "UK_Charlotte", "灵小棠", "Aoede": gemVoice = "Aoede"
+                    case "UK_George", "灵小锋", "Puck": gemVoice = "Puck"
+                    case "灵卓然", "Charon": gemVoice = "Charon"
+                    default: gemVoice = "Kore"
+                    }
+                    let urlStr = Self.geminiBase + "gemini-3.8-flash-lite-tts:streamGenerateContent?alt=sse"
+                    var req = URLRequest(url: URL(string: urlStr)!)
+                    req.httpMethod = "POST"
+                    req.timeoutInterval = 20
+                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    let body: [String: Any] = [
+                        "contents": [["role": "user", "parts": [["text": text]]]],
+                        "generationConfig": [
+                            "responseModalities": ["AUDIO"],
+                            "speechConfig": ["voiceConfig": ["prebuiltVoiceConfig": ["voiceName": gemVoice]]]
+                        ]
+                    ]
+                    req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+                    do {
+                        let (bytes, response) = try await self.session.bytes(for: req)
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        guard code == 200 else { throw Failure.http(code) }
+                        for try await line in bytes.lines {
+                            guard line.hasPrefix("data:"),
+                                  let obj = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any],
+                                  let cands = obj["candidates"] as? [[String: Any]]
+                            else { continue }
+                            for cand in cands {
+                                guard let content = cand["content"] as? [String: Any],
+                                      let parts = content["parts"] as? [[String: Any]] else { continue }
+                                for part in parts {
+                                    if let inline = part["inlineData"] as? [String: Any],
+                                       let b64 = inline["data"] as? String,
+                                       let pcm = Data(base64Encoded: b64), !pcm.isEmpty {
+                                        yield(pcm)
+                                    }
+                                }
+                            }
+                        }
+                        self.report(call, .speak, at: started, queued: queued, outcome: "ok", chars: text.count, firstAudio: firstAudio)
+                        cont.finish()
+                    } catch {
+                        self.report(call, .speak, at: started, queued: queued, outcome: "error", chars: text.count)
+                        cont.finish(throwing: error)
+                    }
+                    return
+                }
                 var req = URLRequest(url: base.appendingPathComponent("audio/speech"))
                 req.httpMethod = "POST"
                 req.timeoutInterval = 20
@@ -482,6 +615,32 @@ final class LingClient: ObservableObject {
     }
 
     // MARK: Transport
+
+    private func postGemini(_ endpoint: String, body: [String: Any], timeout: TimeInterval) async throws -> [String: Any] {
+        guard let url = URL(string: Self.geminiBase + endpoint) else { throw Failure.network }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = timeout
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: req)
+        } catch let e as URLError where e.code == .timedOut {
+            throw Failure.timeout
+        } catch {
+            throw Failure.network
+        }
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        switch code {
+        case 200: break
+        case 429: throw Failure.rateLimited
+        default: throw Failure.http(code)
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.parse }
+        return root
+    }
 
     private func post(_ path: String, body: [String: Any], key: String, timeout: TimeInterval) async throws -> [String: Any] {
         guard let base = config().base else { throw Failure.noKey }

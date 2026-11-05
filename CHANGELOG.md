@@ -1,3 +1,35 @@
+# 版本更新记录 (Changelog · wangxi73 Custom Edition)
+
+本仓库维护 **知了 · Cicada (macOS & iOS)** 的定制增强版本，记录每次迭代的功能更新与架构演进。
+
+## [v1.1.0-custom.1] - 2026-11-05
+### 合并上游 v1.1.0 正式版 & 多语种即时纪要
+- **合并上游 `v1.1.0`**：同步支持本地录音/视频导入转会议纪要 (`FileImport.swift`)、实时纪要窗口内说话人重命名与合并 (`SpeakerViews.swift`)、多 AI 服务面板 (`AIProviders.swift`) 及 macOS 14.4+ 兼容。
+- **任意纪要语种实时切换**：在「实时纪要」悬浮窗顶栏、主窗口「会议记录 › 纪要」、菜单栏弹窗和「设置 › 语言」4 处新增多语种下拉菜单（简体中文、繁體中文、English、日本語、한국어、Español、Français、Deutsch、Português），切换后立即用所选语言重写整篇纪要。
+- **即时生成 AI 纪要**：首句语音落盘后 `1.5s` 自动生成首版 AI 纪要，自动刷新间隔由 `45s` 缩短至 `12s`，并在纪要窗口顶栏新增「✨ 生成纪要」一键刷新按钮。
+
+## [v1.0.0-custom.4] - 2026-11-05
+### 中英夹杂同音词自动纠偏 & iOS 本机声纹识别
+- **中英夹杂同音词还原 (`Translator.swift`)**：保留 `Apple SpeechAnalyzer` 0.3s 极速草稿预览，在整句定稿翻译时通过双行协议 (`SOURCE:` + `TRANSLATION:`) 自动修复单语种 ASR 造成的英文术语同音误识（如“外贝克斯”→`Webex`、“派普兰”→`pipeline`、“阿赖”→`align`）并清理口水词。
+- **iOS 端本机声纹区分说话人 (`CicadaiOS/Sources/SpeakerID.swift`)**：移植 `WeSpeaker ResNet34-LM` (`SpeakerEmbedding.mlpackage`) Core ML 模型至 iOS，通过 80 维 Kaldi Fbank + 256 维声纹余弦聚类自动标记「说话人 1 / 2 / 3」。
+- **修复 iOS 录音断开 Apple VPN 问题 (`CicadaiOS/Sources/SpeechEngine.swift`)**：移除会唤醒系统 `assistantd` (Siri) 并触发 VPN 按需断连规则的 `SFSpeechRecognizer`，改用纯 `AVAudioEngine` 本地 VAD 切片直传 `gemini-3.8-flash` 原生音频理解接口。
+
+## [v1.0.0-custom.3] - 2026-11-04
+### iOS 原生版 (`CicadaiOS`) & Webex 跨 App 混音内录
+- **构建原生 iOS 版 (`CicadaiOS`)**：支持在 iPhone 连上 Apple VPN 时于外网直连 `https://floodgate.g.apple.com` (`gemini-3.8-flash` + `gemini-3.8-flash-lite-tts`)，并提供 Mac 桥接令牌同步 (`/api/floodgate-token`) 与百灵/Google 自动回退。
+- **Webex 后台混音共存与 ReplayKit 内录**：支持 `.mixWithOthers` 后台保活、音频中断自动恢复及 `ReplayKit` (`RPScreenRecorder` / `RPSystemBroadcastPickerView`) 跨 App 音频采集。
+
+## [v1.0.0-custom.2] - 2026-11-04
+### 电脑声音 + 现场麦克风人声同时混音（带独立开关）
+- **双流实时混音 (`AudioRouter.swift`, `ListenEngine.swift`)**：在抓取系统输出流 (`SystemAudioTap`) 的同时并行挂载物理麦克风 (`AVAudioEngine`)；当电脑有声时自动混音，当电脑静音（`SystemAudioTap` 休眠）时由麦克风直接驱动语音识别管线，并增加 `+6 dB` 远场软限幅增益。
+- **四处独立开关 (`ListenPill.swift`, `NotesWindow.swift`, `Views.swift`)**：在主窗口顶部工具栏、实时纪要窗口顶栏、菜单栏弹窗及设置页新增「🎙 现场人声: 开/关」按钮，可随时单独关闭现场收音。
+
+## [v1.0.0-custom.1] - 2026-11-04
+### 接入本机 Apple `genai-bridge` (`127.0.0.1:11211`)
+- **免 Key 自动发现与自适应回退 (`Ling.swift`)**：启动时自动探测本机 `127.0.0.1:11211` 的 Apple `genai-bridge` 守护进程；存在时免 Key 默认启用 `gemini-3.8-flash`（字幕精翻、AI 会议纪要、按住右 `⌥` 一步听音同传）与 `gemini-3.8-flash-lite-tts`（流式 24kHz 16-bit PCM 语音合成，首包 0.59s）；发送给外部无 `genai-bridge` 的 Mac 时自动无感回退至标准模式。
+
+---
+
 # Changelog
 
 One section per release, newest first; one version covers every platform. `scripts/release.sh`

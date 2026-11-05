@@ -171,6 +171,12 @@ final class AppModel: ObservableObject {
             guard let line = self.lineForSegment[segID] else { return }
             self.store.setTranslation(lineID: line, text)
         }
+        listen.onSourceRefined = { [weak self] segID, refined in
+            guard let self else { return }
+            if self.heldJoin?.seg.id == segID { self.heldJoin?.seg.text = refined }
+            guard let line = self.lineForSegment[segID] else { return }
+            self.store.setSource(lineID: line, refined)
+        }
 
         diagnostics.enabled = { [weak self] in self?.settings.diagnostics ?? false }
         diagnostics.folder = { [weak self] in
@@ -527,6 +533,12 @@ final class AppModel: ObservableObject {
 
     func setRunning(_ on: Bool) { on ? start() : requestStop() }
 
+    func setListenMic(_ on: Bool) {
+        settings.listenMic = on
+        listen.syncAmbientMic()
+        refresh()
+    }
+
     /// The menu (⌘R) and the panel switch: a meeting with lines is ended only after asking, with
     /// "继续记录" as the default so a stray Return keeps it going. An empty one just stops.
     func requestStop() {
@@ -569,7 +581,12 @@ final class AppModel: ObservableObject {
     }
 
     func notesLanguageCode(_ id: String) -> String {
-        notesChoice(id) == "source" ? (meetingLanguage(id) ?? settings.myLanguage) : settings.myLanguage
+        let choice = notesChoice(id)
+        switch choice {
+        case "mine", "": return settings.myLanguage
+        case "source": return meetingLanguage(id) ?? settings.myLanguage
+        default: return choice
+        }
     }
 
     /// The subtitle as the 字幕 choice shows it: both lines, the translation alone, or the
@@ -592,11 +609,20 @@ final class AppModel: ObservableObject {
 
     /// A different notes language during a meeting rewrites the notes in it right away.
     func setNotesLanguage(_ choice: String, meetingOnly: Bool = false) {
-        let live = store.liveID
-        let before = live.map(notesLanguageCode)
-        if meetingOnly, let live { notesLanguageFor[live] = choice } else { settings.notesLanguage = choice }
-        if let live, notesLanguageCode(live) != before { notes.rewrite() }
-        debugLog("notesLanguage=\(live.map(notesLanguageCode) ?? settings.notesLanguage) meetingOnly=\(meetingOnly)")
+        let targetID = store.liveID ?? notes.shownID
+        let before = targetID.map(notesLanguageCode)
+        if meetingOnly, let targetID {
+            notesLanguageFor[targetID] = choice
+        } else {
+            settings.notesLanguage = choice
+            if let targetID { notesLanguageFor[targetID] = nil }
+        }
+        if let live = store.liveID {
+            if notesLanguageCode(live) != before { notes.rewrite() }
+        } else if let shown = notes.shownID, !(store.session(shown)?.lines.isEmpty ?? true) {
+            if notesLanguageCode(shown) != before { notes.generate(for: shown) }
+        }
+        debugLog("notesLanguage=\(targetID.map(notesLanguageCode) ?? settings.notesLanguage) meetingOnly=\(meetingOnly)")
         objectWillChange.send()
     }
 
@@ -1137,6 +1163,13 @@ final class AppModel: ObservableObject {
         lineForSegment[seg.id] = id
         store.append(TranscriptLine(id: id, t: t, speaker: "them", src: seg.text, dst: translation ?? seg.translation,
                                     srcLang: seg.sourceCode, dstLang: listen.resolvedTarget))
+        if notes.notes.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                MainActor.assumeIsolated {
+                    if let self, self.notes.notes.isEmpty { self.notes.updateNow() }
+                }
+            }
+        }
         var kept = seg
         kept.voiceSamples = nil
         lastHeard = (kept, id)
