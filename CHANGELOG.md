@@ -2,6 +2,9 @@
 
 本仓库维护 **知了 · Cicada (macOS & iOS)** 的定制增强版本，记录每次迭代的功能更新与架构演进。
 
+## [v1.1B] - 2026-11-05
+- 集成 Apple M5 Max 本地 VibeVoice (7B bfloat16 零样本声音克隆 + Realtime-0.5B 50ms 极速流式同传) 替代同声传译发声引擎，版本号升至 1.1B
+
 ## [v1.1.0-custom.1] - 2026-11-05
 ### 合并上游 v1.1.0 正式版 & 多语种即时纪要
 - **合并上游 `v1.1.0`**：同步支持本地录音/视频导入转会议纪要 (`FileImport.swift`)、实时纪要窗口内说话人重命名与合并 (`SpeakerViews.swift`)、多 AI 服务面板 (`AIProviders.swift`) 及 macOS 14.4+ 兼容。

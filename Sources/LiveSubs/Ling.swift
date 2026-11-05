@@ -172,10 +172,12 @@ final class LingClient: ObservableObject {
     var simulate: Failure?
 
     private static let geminiBase = "http://127.0.0.1:11211/api/gemini/v1beta/models/"
+    private static let vibeVoiceBase = "http://127.0.0.1:3000"
 
     /// Debug control only: act as if there were no key, without touching the key file.
     var hideKey = false
     @Published private(set) var genaiBridgeAvailable = true
+    @Published private(set) var vibeVoiceAvailable = true
 
     /// Tests swap in a session with a stub protocol.
     var session: URLSession = .shared
@@ -204,7 +206,7 @@ final class LingClient: ObservableObject {
     }
     var usable: Bool { hasKey && keyState != .invalid }
     var speaks: Bool { usable && config().hasVoices }
-    var clones: Bool { usable && provider.clones }
+    var clones: Bool { usable && (provider.clones || vibeVoiceAvailable) }
     var hearsAudio: Bool { usable && provider.hearsAudio }
 
     init() {
@@ -248,11 +250,23 @@ final class LingClient: ObservableObject {
         return true
     }
 
+    private func probeVibeVoice() async -> Bool {
+        guard let url = URL(string: Self.vibeVoiceBase + "/health") else { return false }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 1.2
+        guard let (_, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        return true
+    }
+
     func check() async {
-        if hideKey { genaiBridgeAvailable = false; keyState = .none; return }
+        if hideKey { genaiBridgeAvailable = false; vibeVoiceAvailable = false; keyState = .none; return }
         keyState = .checking
         let started = Date()
-        genaiBridgeAvailable = await probeGenAIBridge()
+        async let gOk = probeGenAIBridge()
+        async let vOk = probeVibeVoice()
+        genaiBridgeAvailable = await gOk
+        vibeVoiceAvailable = await vOk
         if isGenAIBridge {
             keyState = .ok(seconds: Date().timeIntervalSince(started))
             debugLog("ai genai-bridge: active → \(keyState)")
@@ -477,6 +491,48 @@ final class LingClient: ObservableObject {
                 func yield(_ pcm: Data) {
                     if firstAudio == nil { firstAudio = Date().timeIntervalSince(started) }
                     cont.yield(pcm)
+                }
+                if self.vibeVoiceAvailable, let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
+                    let vvCall = CallLabel(provider: "vibevoice", model: reference != nil ? "VibeVoice-7B" : "VibeVoice", role: "voice")
+                    var vvReq = URLRequest(url: vvURL)
+                    vvReq.httpMethod = "POST"
+                    vvReq.timeoutInterval = 30
+                    vvReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    var vvBody: [String: Any] = [
+                        "model": reference != nil ? "VibeVoice-7B" : "VibeVoice-Realtime-0.5B",
+                        "input": text,
+                        "response_format": "pcm",
+                        "sample_rate": 24000,
+                        "stream": true,
+                        "stream_format": "sse",
+                    ]
+                    if let reference {
+                        vvBody["references"] = [["audio": reference.audio, "text": reference.text]]
+                        vvBody["voice"] = "clone"
+                    } else if let voice {
+                        vvBody["voice"] = voice
+                    }
+                    if let language { vvBody["language_id"] = language }
+                    vvReq.httpBody = try? JSONSerialization.data(withJSONObject: vvBody)
+                    do {
+                        let (bytes, response) = try await self.session.bytes(for: vvReq)
+                        if (response as? HTTPURLResponse)?.statusCode == 200 {
+                            for try await line in bytes.lines {
+                                guard line.hasPrefix("data:"),
+                                      let obj = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any]
+                                else { continue }
+                                if obj["type"] as? String == "speech.audio.done" { break }
+                                if let b64 = obj["audio"] as? String, let pcm = Data(base64Encoded: b64), !pcm.isEmpty {
+                                    yield(pcm)
+                                }
+                            }
+                            self.report(vvCall, .speak, at: started, queued: queued, outcome: "ok", chars: text.count, firstAudio: firstAudio)
+                            cont.finish()
+                            return
+                        }
+                    } catch {
+                        debugLog("vibevoice speech fallback: \(error)")
+                    }
                 }
                 if self.isGenAIBridge {
                     let gemVoice: String

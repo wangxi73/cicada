@@ -79,7 +79,7 @@ struct VoiceSection: View {
     /// "女 · Ming" / "男 · 本机": who it is and where it comes from.
     private func summary(_ v: VoiceOption) -> String {
         switch v.kind {
-        case .ming: return [v.tags.first, "Ming"].compactMap { $0 }.joined(separator: " · ")
+        case .ming: return [v.tags.first, ling.vibeVoiceAvailable ? "VibeVoice" : "Ming"].compactMap { $0 }.joined(separator: " · ")
         case .cloud: return v.tags.joined(separator: " · ")
         case .system: return [v.tags.first, L("本机")].compactMap { $0 }.joined(separator: " · ")
         case .clone: return L("你的音色")

@@ -115,8 +115,12 @@ final class UpdateChecker {
 
     /// Compares dotted numeric versions: "2.10.0" is newer than "2.9.1".
     nonisolated static func isNewer(_ a: String, than b: String) -> Bool {
-        let x = a.split(separator: ".").map { Int($0) ?? 0 }
-        let y = b.split(separator: ".").map { Int($0) ?? 0 }
+        func parts(_ s: String) -> [Int] {
+            var out = s.split(separator: ".").map { Int($0.prefix(while: \.isNumber)) ?? 0 }
+            if s.uppercased().hasSuffix("B") { out.append(2) }
+            return out
+        }
+        let x = parts(a), y = parts(b)
         for i in 0..<max(x.count, y.count) {
             let l = i < x.count ? x[i] : 0, r = i < y.count ? y[i] : 0
             if l != r { return l > r }
