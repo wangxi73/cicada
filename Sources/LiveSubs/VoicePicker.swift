@@ -197,16 +197,24 @@ struct VoiceSection: View {
         } else {
         HStack(spacing: 10) {
             if has {
-                playButton("clone", highlighted: selected, enabled: ling.clones) { model.previewVoice("clone", language: language) }
-            } else {
-                ZStack {
-                    Circle().fill(Palette.accentPale)
-                    Image(systemName: "mic").font(.system(size: 12)).foregroundStyle(Palette.accentInk)
+                playButton("clone", highlighted: selected, enabled: ling.clones) {
+                    model.setVoice("clone", for: language)
+                    model.previewVoice("clone", language: language)
                 }
-                .frame(width: 28, height: 28)
+            } else {
+                Button { if ling.clones { recording = true } } label: {
+                    ZStack {
+                        Circle().fill(Palette.accentPale)
+                        Image(systemName: "mic").font(.system(size: 12)).foregroundStyle(Palette.accentInk)
+                    }
+                    .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(ling.vibeVoiceAvailable ? "我自己的声音 (VibeVoice 7B 克隆)" : "我自己的声音").font(.system(size: 13, weight: .semibold))
+                Text(ling.vibeVoiceAvailable ? "我自己的声音 (个人音色克隆)" : "我自己的声音")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
                 if has {
                     HStack(spacing: 4) {
                         Text("已录 \(Int(VoiceReference.duration.rounded())) 秒 · \(VoiceReference.savedIsSlow ? L("读得偏慢") : cloneNote)")
@@ -221,10 +229,19 @@ struct VoiceSection: View {
                     }
                     .font(.system(size: 11)).foregroundStyle(Palette.tertiary).lineLimit(1)
                 } else {
-                    Text(ling.vibeVoiceAvailable ? "录 15 秒原声，本机 M5 Max VibeVoice-7B 零样本克隆你的音色" : "录 15 秒原声，对方听到你的音色，晚约 3 秒").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                    Text("点击录制 15 秒原声，同声传译时让对方听到你本人的音色").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
                 }
             }
-            Spacer(minLength: 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard ling.clones else { return }
+                if has {
+                    model.setVoice("clone", for: language)
+                } else {
+                    recording = true
+                }
+            }
             if has {
                 Button { if ling.clones { model.setVoice("clone", for: language) } } label: { Radio(on: selected) }
                     .buttonStyle(.plain).disabled(!ling.clones)
@@ -235,6 +252,7 @@ struct VoiceSection: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(selected ? Palette.accentWash : Palette.raised)
+        .contentShape(Rectangle())
         }
     }
 

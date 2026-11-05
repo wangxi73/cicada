@@ -178,6 +178,7 @@ final class LingClient: ObservableObject {
     var hideKey = false
     @Published private(set) var genaiBridgeAvailable = true
     @Published private(set) var vibeVoiceAvailable = true
+    @Published private(set) var vibeVoiceCloneReady = false
     var ttsEngineMode: String = UserDefaults.standard.string(forKey: "ttsEngine") ?? "vibevoice-auto"
 
     /// Tests swap in a session with a stub protocol.
@@ -255,8 +256,11 @@ final class LingClient: ObservableObject {
         guard let url = URL(string: Self.vibeVoiceBase + "/health") else { return false }
         var req = URLRequest(url: url)
         req.timeoutInterval = 1.2
-        guard let (_, resp) = try? await session.data(for: req),
+        guard let (data, resp) = try? await session.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            vibeVoiceCloneReady = (obj["7b_loaded"] as? Bool == true) || (obj["7b_cached"] as? Bool == true)
+        }
         return true
     }
 
@@ -493,7 +497,8 @@ final class LingClient: ObservableObject {
                     if firstAudio == nil { firstAudio = Date().timeIntervalSince(started) }
                     cont.yield(pcm)
                 }
-                if self.vibeVoiceAvailable, self.ttsEngineMode != "gemini", let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
+                let useLocalVV = self.vibeVoiceAvailable && self.ttsEngineMode != "gemini" && (reference == nil || self.vibeVoiceCloneReady || AIKey.read("ling") == nil)
+                if useLocalVV, let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
                     let vvCall = CallLabel(provider: "vibevoice", model: reference != nil ? "VibeVoice-7B" : "VibeVoice", role: "voice")
                     var vvReq = URLRequest(url: vvURL)
                     vvReq.httpMethod = "POST"
@@ -535,7 +540,7 @@ final class LingClient: ObservableObject {
                         debugLog("vibevoice speech fallback: \(error)")
                     }
                 }
-                if self.isGenAIBridge {
+                if self.isGenAIBridge, (reference == nil || AIKey.read("ling") == nil) {
                     let gemVoice: String
                     switch voice {
                     case "US_Emma", "灵小雅", "Kore": gemVoice = "Kore"
@@ -589,7 +594,8 @@ final class LingClient: ObservableObject {
                 var req = URLRequest(url: base.appendingPathComponent("audio/speech"))
                 req.httpMethod = "POST"
                 req.timeoutInterval = 20
-                if !key.isEmpty { req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+                let realKey = (reference != nil ? (AIKey.read("ling") ?? key) : key)
+                if !realKey.isEmpty { req.setValue("Bearer \(realKey)", forHTTPHeaderField: "Authorization") }
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 var body: [String: Any] = ["model": voiceModel, "input": text, "response_format": "pcm"]
                 if c.provider.id == .ling {

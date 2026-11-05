@@ -910,7 +910,14 @@ final class AppModel: ObservableObject {
     }
 
     func setVoice(_ id: String, for language: String) {
-        settings.speakVoices[VoiceCatalog.key(for: language)] = id
+        if id == "clone" {
+            for lang in VoiceCatalog.languages {
+                settings.speakVoices[lang.key] = "clone"
+            }
+        } else {
+            settings.speakVoices[VoiceCatalog.key(for: language)] = id
+        }
+        objectWillChange.send()
     }
 
     /// Ming's voices need a working key; without one the Mac's voice speaks.
