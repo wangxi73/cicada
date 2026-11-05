@@ -309,6 +309,9 @@ struct VoiceCloneSheet: View {
         .padding(28)
         .frame(width: 560)
         .background(Color.white)
+        .onChange(of: recorder.phase) { _, ph in
+            if ph == .ready { model.setVoice("clone", for: language) }
+        }
         .onDisappear { recorder.cancel(); player?.stop() }
     }
 
@@ -344,7 +347,7 @@ struct VoiceCloneSheet: View {
                     HStack(spacing: 8) { Spinner(size: 14); Text("正在听写…").font(.system(size: 12)).foregroundStyle(Palette.secondary) }
                 default:
                     SoftButton(recorder.phase == .idle ? L("开始录") : L("再录一次"), dark: true) {
-                        recorder.start(locale: ownLocale, device: model.systemMic.recordingDevice)
+                        recorder.start(locale: ownLocale, device: AudioDevices.inputs().first { $0.name.contains("MacBook") } ?? model.systemMic.recordingDevice)
                     }
                     .disabled(!consent)
                 }
@@ -399,7 +402,7 @@ struct VoiceCloneSheet: View {
             Text("听起来不像或有杂音？换个安静的地方重录一次。录音仅保存在本机，可随时删除。")
                 .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
             HStack {
-                SoftButton(L("重录")) { player?.stop(); recorder.start(locale: ownLocale, device: model.systemMic.recordingDevice) }
+                SoftButton(L("重录")) { player?.stop(); recorder.start(locale: ownLocale, device: AudioDevices.inputs().first { $0.name.contains("MacBook") } ?? model.systemMic.recordingDevice) }
                 Spacer()
                 SoftButton(L("用这个声音"), dark: true) { save() }
             }

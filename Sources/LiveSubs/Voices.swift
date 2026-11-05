@@ -376,6 +376,7 @@ final class VoiceRecorder: ObservableObject {
                 self.phase = .failed(L("读得有点慢，克隆的声音也会这么慢。请用平时说话的语速再录一次"))
                 return
             }
+            try? VoiceReference.save(wav: url, text: text)
             self.phase = .ready
         }
     }
