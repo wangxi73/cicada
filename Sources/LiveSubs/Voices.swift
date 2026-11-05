@@ -367,15 +367,13 @@ final class VoiceRecorder: ObservableObject {
         phase = .checking
         let url = url, locale = locale
         Task {
-            let text = await Self.transcribe(url, locale: locale)
+            var text = await Self.transcribe(url, locale: locale)
+            if text.count < 6 {
+                text = VoiceReference.passage(for: locale)
+            }
             self.transcript = text
-            guard text.count >= 6 else { self.phase = .failed(L("没听清录音内容，请换个安静的地方再录一次")); return }
             let pace = VoiceReference.pace(of: url, text: text)
             debugLog("voice clone: \(text.count) chars, pace \(pace.map { String(format: "%.1f", $0) } ?? "-")/s")
-            if let pace, VoiceReference.isSlow(text: text, pace: pace) {
-                self.phase = .failed(L("读得有点慢，克隆的声音也会这么慢。请用平时说话的语速再录一次"))
-                return
-            }
             try? VoiceReference.save(wav: url, text: text)
             self.phase = .ready
         }
