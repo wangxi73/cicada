@@ -1,0 +1,23 @@
+name: build
+
+# The repo is public, so macOS runner minutes are free: check every push to main too.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/test.sh
+      - run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cicada
+          path: |
+            build/Cicada-*.dmg
+            build/Cicada-*.zip
+            build/checksums.txt

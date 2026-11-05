@@ -1,0 +1,33 @@
+# Build output
+.build/
+build/
+.swiftpm/
+.swift-module-cache/
+*.xcodeproj/
+*.app
+*.icns
+*.iconset/
+*.dmg
+
+# Local only: old backups, test screenshots, scratch
+v1/
+test-shots/
+
+.DS_Store
+!Resources/dmg/DS_Store
+
+# Compiled test helpers (build from tools/*.swift)
+tools/*
+!tools/*.swift
+!tools/README.md
+!tools/macos-vm/
+
+# Windows: build output, spike results and clips (windows/spike/make-clips.sh, ming_asr.py)
+windows/**/bin/
+windows/**/obj/
+windows/spike/out/
+windows/spike/clips/*.wav
+
+# Signing keys never enter the repo (android/scripts/keystore.sh keeps them in ~/.cicada-android)
+*.jks
+*.keystore

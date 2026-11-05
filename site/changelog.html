@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>知了更新日志：实时字幕、同声传译、AI 会议纪要的每次更新</title>
+<meta name="description" content="知了（Cicada）每个版本新增、改进和修复了什么。最新版本 {{LATEST_VERSION}}：{{LATEST_TITLE}}。">
+<link rel="canonical" href="{{SITE}}changelog/">
+<link rel="icon" href="{{ROOT}}icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ROOT}}icon.png">
+<link rel="alternate" type="application/atom+xml" title="知了更新日志" href="{{SITE}}feed.xml">
+<meta name="theme-color" content="#F6F7F9">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="知了 Cicada">
+<meta property="og:title" content="知了更新日志">
+<meta property="og:description" content="最新版本 {{LATEST_VERSION}}：{{LATEST_TITLE}}">
+<meta property="og:url" content="{{SITE}}changelog/">
+<meta property="og:image" content="{{SITE}}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="zh_CN">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@wquguru">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap">
+<link rel="stylesheet" href="{{ROOT}}style.css?v={{REV}}">
+<script type="application/ld+json">{{JSONLD}}</script>
+</head>
+<body>
+{{HEADER}}
+<main>
+  <section class="wrap cl-head">
+    <nav class="crumbs" aria-label="面包屑"><a href="{{ROOT}}">知了</a> › 更新日志</nav>
+    <h1>知了更新日志</h1>
+    <p>知了是 Mac、Windows、Linux 和 Android 上的<strong>实时字幕</strong>、<strong>同声传译</strong>和 <strong>AI 会议纪要</strong>工具，在腾讯会议、Zoom、飞书、X Spaces、YouTube 直播里都能用。每个版本新增、改进和修复了什么，都记在这里。</p>
+    <div class="cl-meta">
+      <span class="pill"><span class="dot"></span>最新版本 {{LATEST_VERSION}}</span>
+      <a class="rss" href="{{ROOT}}feed.xml"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg>RSS 订阅</a>
+      <a href="{{REPO}}/releases">GitHub Releases</a>
+    </div>
+  </section>
+
+  <div class="wrap filters" role="group" aria-label="按平台筛选">{{PFILTERS}}</div>
+  <div class="wrap filters" role="group" aria-label="按类型筛选">{{FILTERS}}</div>
+
+  <div class="wrap cl-body">
+    <nav class="versions" aria-label="版本"><span>所有版本</span>{{VERSIONS}}</nav>
+    <div class="releases">
+      {{RELEASES}}
+      <div class="subscribe rv">
+        <div><b>有新版本时通知我</b><p>订阅 RSS，或在 GitHub 上 Watch › Custom › Releases。</p></div>
+        <a class="btn btn-orange" href="{{ROOT}}feed.xml">RSS 地址</a>
+      </div>
+    </div>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+// Filter by platform and by kind, both at once; lines, groups and versions with nothing left are hidden.
+(function () {
+  var kind = 'all', platform = 'all';
+  function apply() {
+    document.querySelectorAll('.group li').forEach(function (li) {
+      li.hidden = platform !== 'all' && li.dataset.platforms.split(' ').indexOf(platform) < 0;
+    });
+    document.querySelectorAll('.group').forEach(function (g) {
+      g.hidden = (kind !== 'all' && g.dataset.kind !== kind) || !g.querySelector('li:not([hidden])');
+    });
+    document.querySelectorAll('.release').forEach(function (r) { r.hidden = !r.querySelector('.group:not([hidden])'); });
+  }
+  document.querySelectorAll('.filters').forEach(function (row) {
+    var buttons = row.querySelectorAll('button');
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        if (b.dataset.kind) kind = b.dataset.kind; else platform = b.dataset.platform;
+        apply();
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <div class="row">
+          <img src="{{ROOT}}icon.svg" alt="" width="44" height="44">
+          <b>{{t.brand_name}}</b><span>{{t.brand_sub}}</span>
+          <span class="bars" aria-hidden="true"><i style="height:12px"></i><i style="height:20px;animation-delay:-.4s"></i><i style="height:9px;animation-delay:-.8s"></i><i style="height:16px;animation-delay:-.2s"></i></span>
+        </div>
+        <p class="slogan">{{t.foot_slogan}}</p>
+        <p>{{t.foot_desc}}</p>
+      </div>
+      <div class="foot-dl">
+        <a class="btn btn-orange desk" href="{{DOWNLOAD}}" data-dl>{{t.dl_mac}}</a>
+        <span>{{t.foot_meta}} · <a href="{{DOWNLOAD_PAGE}}">{{t.all_downloads}}</a></span>
+      </div>
+    </div>
+
+    <nav class="foot-cols" aria-label="{{t.foot_label}}">
+      <div>
+        <h3>{{t.f_product}}</h3>
+        <a href="{{HOME}}#subtitles">{{t.f_subtitles}}</a>
+        <a href="{{HOME}}#interpreting">{{t.f_interp}}</a>
+        <a href="{{HOME}}#notes">{{t.f_notes}}</a>
+        <a href="{{CHANGELOG}}">{{t.nav_changelog}}</a>
+      </div>
+      <div>
+        <h3>{{t.f_scenes}}</h3>
+        {{SCENES}}
+      </div>
+      <div>
+        <h3>{{t.f_help}}</h3>
+        <a href="{{HOME}}start/">{{t.nav_start}}</a>
+        <a href="{{HOME}}#faq">{{t.nav_faq}}</a>
+        <a href="{{HOME}}#roadmap">{{t.road_h}}</a>
+        <a href="{{REPO}}/issues">{{t.f_issues}}</a>
+        <a href="{{REPO}}/releases">{{t.f_releases}}</a>
+      </div>
+      <div>
+        <h3>{{t.f_oss}}</h3>
+        <a href="{{REPO}}">GitHub</a>
+        <a href="{{REPO}}/blob/main/LICENSE">{{t.f_license}}</a>
+        <a href="{{ROOT}}feed.xml">{{t.f_rss}}</a>
+        <a href="{{X}}">{{t.f_x}}</a>
+      </div>
+    </nav>
+
+    <div class="foot-legal">
+      <span>{{t.f_copy}}</span>
+      <span>{{t.f_by}}</span>
+      <span class="foot-langs">{{LANG_LINKS_FOOT}}</span>
+      <span class="tm">{{t.f_tm}}</span>
+    </div>
+  </div>
+  <div class="wordmark" aria-hidden="true">Cicada</div>
+</footer>
+<script>
+// Which system this is: the download buttons (data-dl) and the platform cards and tabs follow it.
+// Without JS, or on a system with nothing released yet, the page stays as built: the Mac download.
+(function () {
+  var ua = navigator.userAgent, os = /Android/i.test(ua) ? 'android'
+    : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+    : /Windows/.test(ua) ? 'windows' : /Linux|X11/.test(ua) && !/CrOS/.test(ua) ? 'linux' : 'mac';
+  var dl = {{DL_JSON}}, d = dl[os];
+  document.documentElement.classList.add('os-' + os, 'js');
+  if (d) document.querySelectorAll('[data-dl]').forEach(function (a) {
+    a.href = d.url;
+    var last = a.lastChild; if (last && last.nodeType === 3) last.nodeValue = ' ' + d.label; else a.textContent = d.label;
+  });
+  document.querySelectorAll('[data-platform="' + os + '"] .yours').forEach(function (el) { el.hidden = false; });
+  window.CICADA_OS = os;
+})();
+// Phones get no download: share the page (AirDrop / messages to yourself) or copy the link.
+var SEND = {{SEND_JSON}};
+document.querySelectorAll('[data-send]').forEach(function (b) {
+  var label = b.textContent;
+  b.addEventListener('click', function () {
+    var url = location.href.split('#')[0];
+    if (navigator.share) { navigator.share({ title: SEND.title, url: url }).catch(function () {}); return; }
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () {
+      b.textContent = SEND.copied;
+      setTimeout(function () { b.textContent = label; }, 2400);
+    }, function () { prompt(SEND.prompt, url); });
+  });
+});
+</script>

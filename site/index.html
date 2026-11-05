@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="{{t.html_lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{t.home_title}}</title>
+<meta name="description" content="{{t.home_desc}}">
+<link rel="canonical" href="{{CANONICAL}}">
+{{HREFLANG}}
+<link rel="icon" href="{{ROOT}}icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ROOT}}icon.png">
+<link rel="alternate" type="application/atom+xml" title="{{t.feed_title}}" href="{{SITE}}feed.xml">
+<meta name="theme-color" content="#F6F7F9">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="知了 Cicada">
+<meta property="og:title" content="{{t.og_title}}">
+<meta property="og:description" content="{{t.og_desc}}">
+<meta property="og:url" content="{{CANONICAL}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{t.og_title}}">
+<meta property="og:locale" content="{{t.og_locale}}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@wquguru">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{{FONTS}}">
+<link rel="stylesheet" href="{{ROOT}}style.css?v={{REV}}">
+<script type="application/ld+json">{{JSONLD}}</script>
+<script type="application/ld+json">{{FAQLD}}</script>
+</head>
+<body>
+{{HEADER}}
+<main>
+  <section class="wrap hero" id="top">
+    <span class="pill"><span class="dot"></span>{{t.pill}}</span>
+    <h1>
+      <span class="kicker">{{t.kicker}}</span>
+      <span class="slogan">{{t.slogan}}</span>
+    </h1>
+    <p class="sub">{{t.sub}}</p>
+    <div class="ctas desk" id="download">
+      <a class="btn btn-orange" href="{{DOWNLOAD}}" data-dl>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>
+        {{t.dl_mac}}
+      </a>
+      <a class="btn btn-light" href="{{HOME}}start/">{{t.how_to_start}}</a>
+    </div>
+    <p class="also desk">{{t.also_on}}</p>
+    <p class="meta desk">{{t.version}} {{VERSION}} · <a href="{{CHANGELOG}}">{{t.whats_new}}</a> · <a href="{{REPO}}">{{t.view_source}}</a></p>
+    <p class="meta desk">{{t.hero_trust}}</p>
+    <div class="sendcard phone">
+      <div class="head">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+        {{t.send_head}}
+      </div>
+      <p>{{t.send_text}}</p>
+      <button class="btn btn-dark" type="button" data-send>{{t.send_btn}}</button>
+    </div>
+    <div class="sendcard apkcard">
+      <div class="head">{{t.apk_head}}</div>
+      <p>{{t.apk_text}}</p>
+      <a class="btn btn-orange" href="{{DOWNLOAD_PAGE}}#android">{{t.dl_android}}</a>
+    </div>
+  </section>
+
+  <section class="wrap stage" aria-label="{{t.demo_label}}">
+    <div class="stage-row tilt-in">
+      <div class="window" data-sample='{{SAMPLE_JSON}}'>
+        <div class="bar"><i></i><i></i><i></i><span class="title">{{t.win_title}}</span><button class="listen" type="button" data-stop="{{t.listen_stop}}" aria-pressed="false" hidden><svg class="play" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg><svg class="stop" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>{{t.listen}} · {{SAMPLE_LEN}}</span></button><span class="live">LIVE</span></div>
+        <div class="screen" aria-hidden="true">
+          <i class="progress"></i>
+          <div class="tiles">
+            <div class="tile"><b>{{t.person1_initial}}</b><span>{{t.person1}}</span><em><i></i><i></i><i></i></em></div>
+            <div class="tile"><b>{{t.person2_initial}}</b><span>{{t.person2}}</span><em><i></i><i></i><i></i></em></div>
+          </div>
+          <div class="subbar"><div class="lines">
+            <div class="cap"><div class="en"><span class="dot"></span>{{t.cap1_src}}</div><div class="zh">{{t.cap1_dst}}</div></div>
+            <div class="cap"><div class="en"><span class="dot"></span>{{t.cap2_src}}</div><div class="zh">{{t.cap2_dst}}</div></div>
+            <div class="cap"><div class="en"><span class="dot"></span>{{t.cap3_src}}</div><div class="zh">{{t.cap3_dst}}</div></div>
+          </div></div>
+        </div>
+      </div>
+      <div class="side">
+        <div class="card notes">
+          <div class="head">{{t.notes_head}}<span class="updating">{{t.updating}}</span></div>
+          <div class="nt why">
+            <div class="q"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7 7.5l3.6 8.6M17 7.5l-3.6 8.6" stroke-dasharray="2 2.4"/></svg><b>{{t.n_why}}</b><span>{{t.fb_kind}}</span></div>
+            <div class="bones">
+              <div class="br"><b>{{t.fb1}}</b>{{t.fb1d}}</div><i></i><div class="br"><b>{{t.fb2}}</b>{{t.fb2d}}</div>
+              <div class="br"><b>{{t.fb3}}</b>{{t.fb3d}}</div><i></i><div class="br weak"><b>{{t.fb4}}</b>{{t.fb4d}}</div>
+            </div>
+            <div class="hint">{{t.fb_hint}}</div>
+          </div>
+          <div class="nt items">
+            <div><b>{{t.n_decision}}</b>{{t.n_decision_text}}</div>
+            <div><b>{{t.n_todo}}</b>{{t.n_todo_text}}<span class="who">{{t.person2}}</span></div>
+          </div>
+        </div>
+        <div class="card speak">
+          <div class="hold">{{t.speak_hold}}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+  // The meeting above with its sound: only on a click. While the clip plays the speaker and the
+  // subtitle follow its turns (who spoke when, measured in scripts/make-sample.sh): the original
+  // comes in word by word as it is said and the translation trails it, as in the app. When the clip
+  // ends the silent loop takes over again.
+  (function () {
+    var w = document.querySelector('.window[data-sample]'), s = JSON.parse(w.dataset.sample);
+    var btn = w.querySelector('.listen'), label = btn.querySelector('span').textContent, bar = w.querySelector('.progress');
+    var tiles = w.querySelectorAll('.tile'), caps = w.querySelectorAll('.cap'), audio = null, raf = 0;
+    // The translation starts this many seconds after the voice and catches up as the sentence ends,
+    // before the next speaker (turns are at least 0.2 s apart).
+    var LAG = 0.8;
+    var lines = [].map.call(caps, function (c) {
+      var src = c.querySelector('.en').lastChild, dst = c.querySelector('.zh').firstChild;
+      return { src: src, dst: dst, full: [src.nodeValue, dst.nodeValue] };
+    });
+    btn.hidden = false;
+    function mark(list, i) { list.forEach(function (el, j) { el.classList.toggle('on', j === i); }); }
+    // The first share p of a line: by words in English, by characters in Chinese, Japanese and Korean.
+    function part(text, p) {
+      var units = /^[\x00-\x7F’]*$/.test(text) ? text.split(/(?=\s)/) : Array.from(text);
+      return units.slice(0, Math.ceil(units.length * Math.max(0, Math.min(1, p)))).join('');
+    }
+    function reveal(t) {
+      s.turns.forEach(function (turn, i) {
+        var l = lines[i], d = turn[2] - turn[1];
+        l.src.nodeValue = t === null ? l.full[0] : part(l.full[0], (t - turn[1]) / d);
+        l.dst.nodeValue = t === null ? l.full[1] : part(l.full[1], (t - turn[1] - LAG) / (d - LAG + 0.1));
+      });
+    }
+    function frame() {
+      var t = audio.currentTime, talk = -1, cap = 0;
+      s.turns.forEach(function (turn, i) { if (t >= turn[1]) cap = i; if (t >= turn[1] && t < turn[2]) talk = turn[0]; });
+      mark(tiles, talk); mark(caps, cap); reveal(t);
+      bar.style.width = Math.min(100, t / s.len * 100) + '%';
+      raf = requestAnimationFrame(frame);
+    }
+    function stop() {
+      cancelAnimationFrame(raf);
+      if (audio) { audio.pause(); audio = null; }
+      w.classList.remove('playing'); mark(tiles, -1); mark(caps, -1); reveal(null);
+      btn.querySelector('span').textContent = label; btn.setAttribute('aria-pressed', 'false');
+    }
+    btn.addEventListener('click', function () {
+      if (audio) { stop(); return; }
+      var a = audio = new Audio(s.src);
+      // The last translation stays up a moment after the voice ends.
+      a.addEventListener('ended', function () { setTimeout(function () { if (audio === a) stop(); }, 1200); });
+      audio.play().then(function () {
+        w.classList.add('playing'); frame();
+        btn.querySelector('span').textContent = btn.dataset.stop; btn.setAttribute('aria-pressed', 'true');
+      }, stop);
+    });
+  })();
+  </script>
+
+  <section class="works" aria-labelledby="works-t">
+    <p id="works-t">{{t.works}}</p>
+    <div class="marquee">
+      <ul class="track">{{APPS}}</ul>
+    </div>
+  </section>
+
+  <section class="wrap why" id="why">
+    <h2 class="big rv">{{t.why_h}}</h2>
+    <p class="lead rv">{{t.why_lead}}</p>
+    <div class="rows">
+      <div class="card compare rv"><h3>{{t.c1_h}}</h3><div><b>{{t.builtin}}</b>{{t.c1_b}}</div><div class="us"><b>{{t.us}}</b>{{t.c1_u}}</div></div>
+      <div class="card compare rv"><h3>{{t.c2_h}}</h3><div><b>{{t.builtin}}</b>{{t.c2_b}}</div><div class="us"><b>{{t.us}}</b>{{t.c2_u}}</div></div>
+      <div class="card compare rv"><h3>{{t.c3_h}}</h3><div><b>{{t.builtin}}</b>{{t.c3_b}}</div><div class="us"><b>{{t.us}}</b>{{t.c3_u}}</div></div>
+    </div>
+  </section>
+
+  <section class="wrap verbs" id="how" aria-label="{{t.how_label}}">
+    <article class="verb rv" id="subtitles"><small>{{t.v1_small}}</small><h3>{{t.v1_h}}</h3><p>{{t.v1_p}}</p></article>
+    <article class="verb rv" id="interpreting"><small>{{t.v2_small}}</small><h3>{{t.v2_h}}</h3><p>{{t.v2_p}}</p><a class="more" href="#speak">{{t.sp_more}} ↓</a></article>
+    <article class="verb rv" id="notes"><small>{{t.v3_small}}</small><h3>{{t.v3_h}}</h3><p>{{t.v3_p}}</p><a class="more" href="#records">{{t.rec_more}} ↓</a></article>
+    <p class="fine">{{t.fine}} <a href="{{HOME}}start/">{{t.how_to_start}} →</a></p>
+  </section>
+
+  <section class="wrap scene" id="speak" aria-labelledby="speak-t">
+    <div class="scene-head rv"><div><small>{{t.v2_small}}</small><h2 id="speak-t">{{t.sp_h}}</h2></div><p>{{t.sp_p}}</p></div>
+    <div class="sp" data-speak='{{SPEAK_JSON}}'>
+      <div class="sp-call" aria-hidden="true">
+        <div class="bar"><i></i><i></i><i></i><span class="title">{{t.win_title}}</span><span class="mic">{{t.sp_mic}}</span></div>
+        <div class="sp-tiles">
+          <div class="pt"><b>{{t.person1_initial}}</b><span>{{t.person1}}</span></div>
+          <div class="pt"><b>{{t.person2_initial}}</b><span>{{t.person2}}</span></div>
+          <div class="you">
+            <b>{{t.sp_you}}</b>
+            <div class="lines">
+              <span class="state"><em>{{t.sp_l1}}</em><em>{{t.sp_l2}}</em><em>{{t.sp_l3}}</em></span>
+              <span class="said">{{t.sp_said}}</span>
+              <span class="heard">{{t.sp_heard}}</span>
+            </div>
+            <span class="vol"><i></i><i></i><i></i><i></i></span>
+          </div>
+        </div>
+      </div>
+      <ol class="sp-steps">
+        <li><span>{{t.sp_s1}}</span><kbd>{{t.sp_key}}</kbd></li>
+        <li><span>{{t.sp_s2}}</span>{{t.sp_said}}</li>
+        <li><span>{{t.sp_s3}}</span><b>{{t.sp_heard}}</b></li>
+        <li><span>{{t.sp_s4}}</span>{{t.sp_s4_p}}</li>
+        <li class="play"><button class="listen" type="button" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>{{t.sp_listen}}</button></li>
+      </ol>
+    </div>
+  </section>
+  <script>
+  // 听一段: start the scene over and let the room's voice come in when it reaches 说进会议.
+  (function () {
+    var sp = document.querySelector('.sp[data-speak]'), s = JSON.parse(sp.dataset.speak), btn = sp.querySelector('.listen'), t = 0;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      clearTimeout(t);
+      var all = sp.querySelectorAll('*');
+      all.forEach(function (el) { el.style.animation = 'none'; }); void sp.offsetWidth;
+      all.forEach(function (el) { el.style.animation = ''; });
+      var a = new Audio(s.src);
+      t = setTimeout(function () { a.play().catch(function () {}); }, s.at * 1000);
+    });
+  })();
+  </script>
+
+  <section class="wrap scene" id="records" aria-labelledby="records-t">
+    <div class="scene-head rv"><div><small>{{t.v3_small}}</small><h2 id="records-t">{{t.rec_h}}</h2></div><p>{{t.rec_p}}</p></div>
+    <div class="paper">
+      <svg class="link" aria-hidden="true"><path/></svg>
+      <div class="paper-top">
+        <div><div class="meta">{{t.rec_meta}}</div><div class="name">{{t.rec_title}}</div></div>
+        <span class="formats"><span>Markdown</span><span>Word</span><span>SRT</span></span>
+      </div>
+      <div class="paper-body">
+        <div class="notes-col">
+          <div class="concl">
+            <small>{{t.n_decision}}</small>
+            <div data-k="1"><b class="n">1</b><span>{{t.rec_c1}}</span></div>
+            <div data-k="3"><b class="n">2</b><span>{{t.rec_c2}}</span></div>
+          </div>
+          <div class="fish">
+            <div class="q"><b>{{t.n_why}}</b><span>{{t.fb_kind}}</span></div>
+            <div class="bones">
+              <div class="br"><b>{{t.fb1}}</b>{{t.fb1d}}</div><i></i><div class="br" data-k="2"><b>{{t.fb2}}</b>{{t.fb2d}}</div>
+              <div class="br"><b>{{t.fb3}}</b>{{t.fb3d}}</div><i></i><div class="br weak"><b>{{t.fb4}}</b>{{t.fb4d}}</div>
+            </div>
+          </div>
+        </div>
+        <div class="quotes">
+          <small>{{t.rec_quotes}}</small>
+          <div data-k="1"><span class="at">00:03</span><span class="src">{{t.cap2_src}}</span>{{t.cap2_dst}}</div>
+          <div data-k="2"><span class="at">02:10</span><span class="src">{{t.rec_q2_src}}</span>{{t.rec_q2_dst}}</div>
+          <div data-k="3"><span class="at">04:10</span><span class="src">{{t.rec_q3_src}}</span>{{t.rec_q3_dst}}</div>
+          <p class="hint">{{t.rec_hint}}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>
+  // Each conclusion or branch lights up with the line it came from: in turn on its own, or the one
+  // under the pointer; side by side, a line joins the two.
+  (function () {
+    var paper = document.querySelector('.paper'), svg = paper.querySelector('.link'), path = svg.querySelector('path');
+    var items = paper.querySelectorAll('[data-k]'), k = 1, timer = 0, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function light(n) {
+      k = n;
+      items.forEach(function (el) { el.classList.toggle('lit', el.dataset.k == n); });
+      var a = paper.querySelector('.notes-col [data-k="' + n + '"]'), b = paper.querySelector('.quotes [data-k="' + n + '"]');
+      var p = paper.getBoundingClientRect(), ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      if (rb.left < ra.right) { path.removeAttribute('d'); return; } // stacked on a phone
+      var x1 = ra.right - p.left, y1 = ra.top + ra.height / 2 - p.top, x2 = rb.left - p.left - 4, y2 = rb.top + rb.height / 2 - p.top, m = (x1 + x2) / 2;
+      path.setAttribute('d', 'M' + x1 + ' ' + y1 + 'C' + m + ' ' + y1 + ' ' + m + ' ' + y2 + ' ' + x2 + ' ' + y2);
+    }
+    function cycle() { clearInterval(timer); if (!still) timer = setInterval(function () { light(k % 3 + 1); }, 2600); }
+    items.forEach(function (el) {
+      el.addEventListener('mouseenter', function () { clearInterval(timer); light(+el.dataset.k); });
+      el.addEventListener('mouseleave', cycle);
+    });
+    addEventListener('resize', function () { light(k); });
+    light(1); cycle();
+  })();
+  </script>
+
+  <section class="wrap roadmap" id="privacy" aria-labelledby="privacy-t">
+    <div class="head rv"><h2 id="privacy-t">{{t.privacy_h}}</h2><a href="{{t.privacy_url}}">{{t.privacy_link}}</a></div>
+    <div class="rows">
+      <div class="card stage-card rv"><small class="now">{{t.p1_small}}</small><h3>{{t.p1_h}}</h3><p>{{t.p1_p}}</p></div>
+      <div class="card stage-card rv"><small>{{t.p2_small}}</small><h3>{{t.p2_h}}</h3><p>{{t.p2_p}}</p></div>
+      <div class="card stage-card rv"><small>{{t.p3_small}}</small><h3>{{t.p3_h}}</h3><p>{{t.p3_p}}</p></div>
+    </div>
+  </section>
+
+  <section class="wrap roadmap" id="roadmap" aria-labelledby="roadmap-t">
+    <div class="head rv"><div><h2 id="roadmap-t">{{t.road_h}}</h2><p>{{t.road_sub}}</p></div><a href="{{REPO}}/issues">{{t.road_link}}</a></div>
+    <div class="road">
+      <div class="card road-col rv"><small class="now"><i></i>{{t.road_next}}</small><ol>{{ROAD_NEXT}}</ol></div>
+      <div class="card road-col rv"><small>{{t.road_later}}</small><ul>{{ROAD_LATER}}</ul></div>
+      <div class="road-col none rv"><small>{{t.road_none}}</small><ul>{{ROAD_NONE}}</ul></div>
+    </div>
+  </section>
+
+  <section class="wrap faq" id="faq" aria-labelledby="faq-t">
+    <div class="faq-side rv">
+      <small>{{t.faq_small}}</small>
+      <h2 id="faq-t">{{t.faq_h}}</h2>
+      <p>{{t.faq_sub}}</p>
+      <div class="card req-card">
+        <h3><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>{{t.req_h}}</h3>
+        <dl>{{REQS}}</dl>
+        <p>{{t.req_how}}</p>
+      </div>
+      <a href="{{REPO}}/issues">{{t.faq_ask}}</a>
+    </div>
+    <div class="faq-list">{{FAQ}}</div>
+  </section>
+  <script>
+  // A link to #faq-… (the setup page's "will it run on my Mac?") opens that answer.
+  function openFaq() { var d = location.hash && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') d.open = true; }
+  openFaq(); addEventListener('hashchange', openFaq);
+  </script>
+
+{{LATEST_SECTION}}
+
+  <section class="wrap cta">
+    <div class="cta-box rv">
+      <svg width="104" height="104" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="23" fill="#FFFFFF" fill-opacity="0.16"/><g fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"><path d="M18 36Q26 10 45 20"/><path d="M82 36Q74 10 55 20"/></g><g class="eye"><circle cx="36" cy="46" r="13" fill="#FFFFFF"/><circle cx="39" cy="49" r="6" fill="#15171C"/></g><g class="eye"><circle cx="64" cy="46" r="13" fill="#FFFFFF"/><circle cx="67" cy="49" r="6" fill="#15171C"/></g><rect x="12" y="58" width="76" height="28" rx="9" fill="#15171C"/><path d="M21 68h44" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/><path d="M21 77h26" stroke="#E8552B" stroke-width="5" stroke-linecap="round"/></svg>
+      <div class="txt">
+        <h2>{{t.cta_h}}</h2>
+        <p>{{t.cta_p}}</p>
+      </div>
+      <a class="btn btn-dark desk" href="{{DOWNLOAD}}" data-dl>{{t.dl_mac}}</a>
+      <button class="btn btn-dark phone" type="button" data-send>{{t.send_btn}}</button>
+    </div>
+  </section>
+</main>
+{{FOOTER}}
+</body>
+</html>

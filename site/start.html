@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="{{t.html_lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{t.start_title}}</title>
+<meta name="description" content="{{t.start_desc}}">
+<link rel="canonical" href="{{CANONICAL}}">
+{{HREFLANG}}
+<link rel="icon" href="{{ROOT}}icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ROOT}}icon.png">
+<meta name="theme-color" content="#F6F7F9">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="知了 Cicada">
+<meta property="og:title" content="{{t.start_h1}}">
+<meta property="og:description" content="{{t.start_desc}}">
+<meta property="og:url" content="{{CANONICAL}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{t.og_title}}">
+<meta property="og:locale" content="{{t.og_locale}}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@wquguru">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{{FONTS}}">
+<link rel="stylesheet" href="{{ROOT}}style.css?v={{REV}}">
+<script type="application/ld+json">{{JSONLD}}</script>
+</head>
+<body>
+{{HEADER}}
+<main class="start">
+  <section class="wrap start-head">
+    <h1>{{t.start_h1}}</h1>
+    <p class="lead">{{t.start_lead}}</p>
+    <div class="ptabs" role="tablist" aria-label="{{t.start_tabs_label}}">
+      <button type="button" role="tab" id="tab-mac" aria-controls="p-mac" aria-selected="true" data-p="mac">Mac</button>
+      <button type="button" role="tab" id="tab-windows" aria-controls="p-windows" aria-selected="false" data-p="windows">Windows</button>
+      <button type="button" role="tab" id="tab-linux" aria-controls="p-linux" aria-selected="false" data-p="linux">Linux</button>
+      <button type="button" role="tab" id="tab-android" aria-controls="p-android" aria-selected="false" data-p="android">Android</button>
+    </div>
+    <div class="sendcard phone">
+      <div class="head">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+        {{t.start_mob_h}}
+      </div>
+      <p>{{t.start_mob_p}}</p>
+      <button class="btn btn-dark" type="button" data-send>{{t.send_btn}}</button>
+    </div>
+  </section>
+
+  <div class="pblock on" id="p-mac" role="tabpanel" aria-labelledby="tab-mac" data-p="mac">
+  <p class="wrap preq">{{t.start_req}} <a href="{{HOME}}#faq-mac">{{t.start_mac_q}}</a></p>
+  <ol class="wrap steps">
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">1</span>
+        <h2>{{t.s1_h}}</h2>
+        <p>{{t.s1_p}}</p>
+        <a class="btn btn-dark desk" href="{{DOWNLOAD}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>
+          {{t.download_free}}
+        </a>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.gate_h}}</b>
+        <p>{{t.gate_p}}</p>
+        <div class="path"><span>{{t.gate_1}}</span><i aria-hidden="true">›</i><span>{{t.gate_2}}</span><i aria-hidden="true">›</i><span class="last">{{t.gate_3}}</span></div>
+        <div class="trust">
+          <b>{{t.trust_h}}</b>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5l3.2 3L14 5.5"/></svg><span>{{t.trust_1}}</span></li>
+            <li><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5l3.2 3L14 5.5"/></svg><span>{{t.trust_2}}</span></li>
+            <li><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5l3.2 3L14 5.5"/></svg><span>{{t.trust_3}}</span></li>
+          </ul>
+        </div>
+      </div>
+    </li>
+
+    <li class="step key">
+      <div class="step-text">
+        <div class="num-row"><span class="num accent" aria-hidden="true">2</span><span class="badge">{{t.s2_badge}}</span></div>
+        <h2>{{t.s2_h}}</h2>
+        <p>{{t.s2_p}}</p>
+        <a class="btn btn-orange" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">
+          {{t.s2_btn}}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          <span class="sr">{{t.new_tab}}</span>
+        </a>
+        <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
+        <p class="hint">{{t.offer_note}}</p>
+      </div>
+      <div class="step-aside gains">
+        <b>{{t.gain_h}}</b>
+        <ul>
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><span><strong>{{t.gain1_b}}</strong>{{t.gain1_t}}</span></li>
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><span><strong>{{t.gain2_b}}</strong>{{t.gain2_t}}</span></li>
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><span><strong>{{t.gain3_b}}</strong>{{t.gain3_t}}</span></li>
+        </ul>
+        <p class="without">{{t.without_key}}</p>
+      </div>
+    </li>
+
+    <li class="step wide">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">3</span>
+        <h2>{{t.s3_h}}</h2>
+        <p>{{t.s3_p}}</p>
+        <ol class="sub">
+          <li>{{t.s3_li1}}</li>
+          <li>{{t.s3_li2}}</li>
+          <li>{{t.s3_li3}}</li>
+        </ol>
+        <p class="hint">{{t.s3_after}}</p>
+      </div>
+      <div class="step-aside shots">
+        <figure>
+          <img src="{{ROOT}}img/start/{{LANG}}-permissions.jpg" width="1100" height="860" alt="{{t.shot_perm_alt}}" loading="lazy">
+          <figcaption>{{t.shot_perm_cap}}</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ROOT}}img/start/{{LANG}}-key.jpg" width="1100" height="860" alt="{{t.shot_key_alt}}" loading="lazy">
+          <figcaption>{{t.shot_key_cap}}</figcaption>
+        </figure>
+      </div>
+    </li>
+  </ol>
+
+  <section class="wrap later" aria-labelledby="later-t">
+    <h2 id="later-t">{{t.later_h}}</h2>
+    <div class="rows">
+      <div class="card"><h3>{{t.later1_h}}</h3><p>{{t.later1_p}}</p></div>
+      <div class="card"><h3>{{t.later2_h}}</h3><p>{{t.later2_p}}</p></div>
+    </div>
+    <p class="more">{{t.more}}</p>
+  </section>
+  </div>
+  <div class="pblock" id="p-windows" role="tabpanel" aria-labelledby="tab-windows" data-p="windows">
+  <p class="wrap preq">{{t.w_req}}</p>
+  <ol class="wrap steps">
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">1</span>
+        <h2>{{t.s1_h}}</h2>
+        <p>{{t.w_s1_p}}</p>
+        <a class="btn btn-dark" href="{{DOWNLOAD_PAGE}}#windows"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>{{t.dl_windows}}</a>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.w_gate_h}}</b>
+        <p>{{t.w_gate_p}}</p>
+        <div class="path"><span>{{t.w_gate_1}}</span><i aria-hidden="true">›</i><span class="last">{{t.w_gate_2}}</span></div>
+        <p class="note">{{t.w_gate_note}}</p>
+      </div>
+    </li>
+    <li class="step key">
+      <div class="step-text">
+        <div class="num-row"><span class="num accent" aria-hidden="true">2</span><span class="badge">{{t.s2_badge_req}}</span></div>
+        <h2>{{t.s2_h}}</h2>
+        <p>{{t.s2_p}}</p>
+        <a class="btn btn-orange" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">
+          {{t.s2_btn}}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          <span class="sr">{{t.new_tab}}</span>
+        </a>
+        <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
+        <p class="hint">{{t.w_key_note}}</p>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.s2_req_h}}</b>
+        <p>{{t.s2_req_note}}</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">3</span>
+        <h2>{{t.w_s3_h}}</h2>
+        <p>{{t.w_s3_p}}</p>
+        <ol class="sub">
+          <li>{{t.w_s3_li1}}</li>
+          <li>{{t.w_s3_li2}}</li>
+          <li>{{t.w_s3_li3}}</li>
+          <li>{{t.w_s3_li4}}</li>
+        </ol>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.w_s3_aside_h}}</b>
+        <p>{{t.w_s3_aside_p}}</p>
+        <p class="note">{{t.w_s3_note}}</p>
+      </div>
+    </li>
+  </ol>
+  </div>
+  <div class="pblock" id="p-linux" role="tabpanel" aria-labelledby="tab-linux" data-p="linux">
+  <p class="wrap preq">{{t.l_req}}</p>
+  <ol class="wrap steps">
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">1</span>
+        <h2>{{t.s1_h}}</h2>
+        <p>{{t.l_s1_p}}</p>
+        <code class="cmd">tar xzf Cicada-*-Linux.tar.gz &amp;&amp; cicada-linux/install.sh</code>
+        <a class="btn btn-dark" href="{{DOWNLOAD_PAGE}}#linux"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>{{t.dl_linux}}</a>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.l_gate_h}}</b>
+        <p>{{t.l_gate_p}}</p>
+        <p class="note">{{t.l_gate_note}}</p>
+      </div>
+    </li>
+    <li class="step key">
+      <div class="step-text">
+        <div class="num-row"><span class="num accent" aria-hidden="true">2</span><span class="badge">{{t.s2_badge_req}}</span></div>
+        <h2>{{t.s2_h}}</h2>
+        <p>{{t.s2_p}}</p>
+        <a class="btn btn-orange" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">
+          {{t.s2_btn}}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          <span class="sr">{{t.new_tab}}</span>
+        </a>
+        <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
+        <p class="hint">{{t.l_key_note}}</p>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.s2_req_h}}</b>
+        <p>{{t.s2_req_note}}</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">3</span>
+        <h2>{{t.l_s3_h}}</h2>
+        <p>{{t.l_s3_p}}</p>
+        <ol class="sub">
+          <li>{{t.l_s3_li1}}</li>
+          <li>{{t.l_s3_li2}}</li>
+          <li>{{t.l_s3_li3}}</li>
+          <li>{{t.l_s3_li4}}</li>
+        </ol>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.l_s3_aside_h}}</b>
+        <p>{{t.l_s3_aside_p}}</p>
+        <p class="note">{{t.l_s3_note}}</p>
+      </div>
+    </li>
+  </ol>
+  </div>
+  <div class="pblock" id="p-android" role="tabpanel" aria-labelledby="tab-android" data-p="android">
+  <p class="wrap preq">{{t.a_req}}</p>
+  <ol class="wrap steps">
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">1</span>
+        <h2>{{t.s1_h}}</h2>
+        <p>{{t.a_s1_p}}</p>
+        <a class="btn btn-dark" href="{{DOWNLOAD_PAGE}}#android"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>{{t.dl_android}}</a>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.a_gate_h}}</b>
+        <p>{{t.a_gate_p}}</p>
+        <p class="note">{{t.a_gate_note}}</p>
+      </div>
+    </li>
+    <li class="step key">
+      <div class="step-text">
+        <div class="num-row"><span class="num accent" aria-hidden="true">2</span><span class="badge">{{t.s2_badge_req}}</span></div>
+        <h2>{{t.s2_h}}</h2>
+        <p>{{t.s2_p}}</p>
+        <a class="btn btn-orange" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">
+          {{t.s2_btn}}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          <span class="sr">{{t.new_tab}}</span>
+        </a>
+        <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
+        <p class="hint">{{t.a_key_note}}</p>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.s2_req_h}}</b>
+        <p>{{t.s2_req_note}}</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-text">
+        <span class="num" aria-hidden="true">3</span>
+        <h2>{{t.a_s3_h}}</h2>
+        <p>{{t.a_s3_p}}</p>
+        <ol class="sub">
+          <li>{{t.a_s3_li1}}</li>
+          <li>{{t.a_s3_li2}}</li>
+          <li>{{t.a_s3_li3}}</li>
+          <li>{{t.a_s3_li4}}</li>
+        </ol>
+      </div>
+      <div class="step-aside gate">
+        <b>{{t.a_s3_aside_h}}</b>
+        <p>{{t.a_s3_aside_p}}</p>
+        <p class="note">{{t.a_s3_note}}</p>
+      </div>
+    </li>
+  </ol>
+  <section class="wrap later aguide" aria-labelledby="aguide-t">
+    <h2 id="aguide-t">{{t.a_guide_h}}</h2>
+    <p class="more">{{t.a_guide_p}}</p>
+    <div class="rows">
+      <div class="card"><small>{{t.a_ov_small}} · Android 10–14</small><h3>{{t.a_ov1_h}}</h3><p>{{t.a_ov1_p}}</p></div>
+      <div class="card"><small>{{t.a_ov_small}} · Android 15+</small><h3>{{t.a_ov2_h}}</h3><p>{{t.a_ov2_p}}</p></div>
+      <div class="card"><small>{{t.a_ov_small}} · {{t.a_ov3_brand}}</small><h3>{{t.a_ov3_h}}</h3><p>{{t.a_ov3_p}}</p></div>
+      <div class="card"><small>{{t.a_cap_small}}</small><h3>{{t.a_cap_h}}</h3><p>{{t.a_cap_p}}</p></div>
+      <div class="card"><small>{{t.a_meet_small}}</small><h3>{{t.a_meet_h}}</h3><p>{{t.a_meet_p}}</p></div>
+    </div>
+  </section>
+  </div>
+</main>
+{{FOOTER}}
+<script>
+// One platform's steps at a time: the visitor's own (footer.html), or the one in the link (#windows).
+// Without JS every platform's steps show, one after another.
+(function () {
+  var tabs = document.querySelectorAll('.ptabs [role=tab]'), blocks = document.querySelectorAll('.pblock');
+  function pick(p, focus) {
+    tabs.forEach(function (b) { var on = b.dataset.p === p; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+    blocks.forEach(function (el) { el.classList.toggle('on', el.dataset.p === p); });
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { pick(b.dataset.p); history.replaceState(null, '', '#' + b.dataset.p); });
+    b.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { e.preventDefault(); pick(tabs[(i + d + tabs.length) % tabs.length].dataset.p, true); }
+    });
+  });
+  var want = location.hash.slice(1);
+  pick(['mac', 'windows', 'linux', 'android'].indexOf(want) >= 0 ? want : (window.CICADA_OS === 'ios' ? 'mac' : window.CICADA_OS || 'mac'));
+})();
+</script>
+</body>
+</html>
