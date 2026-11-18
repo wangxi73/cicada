@@ -318,6 +318,7 @@ final class AppModel: ObservableObject {
         translator.proxyHint = { await ProxyProbe.hint() }
 
         ling.config = { [weak self] in self?.settings.aiConfig ?? AIConfig(provider: .ling, base: AIProvider.ling.base, textModel: "Ling-3.1-flash") }
+        ling.ttsEngineMode = settings.ttsEngine
         listen.translator = translator
         roomListen.translator = translator
         roomListen.voiceMic = voiceMic
@@ -1292,7 +1293,14 @@ final class AppModel: ObservableObject {
     }
 
     func setVoice(_ id: String, for language: String) {
-        settings.speakVoices[VoiceCatalog.key(for: language)] = id
+        if id == "clone" {
+            for lang in VoiceCatalog.languages {
+                settings.speakVoices[lang.key] = "clone"
+            }
+        } else {
+            settings.speakVoices[VoiceCatalog.key(for: language)] = id
+        }
+        objectWillChange.send()
     }
 
     /// Ming's voices need a working key; without one the Mac's voice speaks.

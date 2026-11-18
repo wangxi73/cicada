@@ -201,7 +201,11 @@ final class LingClient: ObservableObject {
     /// Debug control only: act as if there were no key, without touching the key file.
     var hideKey = false
     private static let geminiBase = "http://127.0.0.1:11211/api/gemini/v1beta/models/"
+    private static let vibeVoiceBase = "http://127.0.0.1:3000"
     @Published private(set) var genaiBridgeAvailable = false
+    @Published private(set) var vibeVoiceAvailable = false
+    @Published private(set) var vibeVoiceCloneReady = false
+    var ttsEngineMode: String = UserDefaults.standard.string(forKey: "ttsEngine") ?? "vibevoice-auto"
 
     /// Tests swap in a session with a stub protocol.
     var session: URLSession = .shared
@@ -244,9 +248,9 @@ final class LingClient: ObservableObject {
     /// The key is known to work (or at least not known to be bad): notes and translation.
     var usable: Bool { hasKey && keyState != .invalid }
     /// Voices in the room from this service (else the Mac's).
-    var speaks: Bool { usable && config().hasVoices }
+    var speaks: Bool { (usable && config().hasVoices) || vibeVoiceAvailable }
     /// The user's own voice: only Ling clones.
-    var clones: Bool { usable && provider.clones }
+    var clones: Bool { (usable && provider.clones) || vibeVoiceAvailable }
     /// Speak-back heard by the service's audio model (Ming) instead of on this Mac.
     var hearsAudio: Bool { usable && provider.hearsAudio }
     /// The meeting recognized by the custom service's speech model instead of on this Mac.
@@ -339,6 +343,22 @@ final class LingClient: ObservableObject {
         return true
     }
 
+    private func probeVibeVoice() async -> Bool {
+        #if os(macOS)
+        guard let url = URL(string: Self.vibeVoiceBase + "/health") else { return false }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 1.2
+        guard let (data, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            vibeVoiceCloneReady = (obj["7b_loaded"] as? Bool == true) || (obj["7b_cached"] as? Bool == true)
+        }
+        return true
+        #else
+        return false
+        #endif
+    }
+
     func check() async {
         // Counted before anything else: a slower check still running (a custom service that thinks
         // for seconds) must not land on top of what this one finds, even "no key".
@@ -346,8 +366,12 @@ final class LingClient: ObservableObject {
         let generation = checkGeneration
         if hideKey {
             genaiBridgeAvailable = false
+            vibeVoiceAvailable = false
         } else {
-            genaiBridgeAvailable = await probeGenAIBridge()
+            async let gOk = probeGenAIBridge()
+            async let vOk = probeVibeVoice()
+            genaiBridgeAvailable = await gOk
+            vibeVoiceAvailable = await vOk
         }
         guard let key else { keyState = .none; aiCheck = AICheck(); return }
         keyState = .checking
@@ -863,19 +887,63 @@ final class LingClient: ObservableObject {
                 language: String? = nil) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { cont in
             let task = Task { @MainActor [weak self] in
-                guard let self, let key = self.key else { cont.finish(throwing: Failure.noKey); return }
-                let c = self.config()
-                guard let base = c.voiceBase, let voiceModel = c.voiceModel else { cont.finish(throwing: Failure.noKey); return }
+                guard let self else { cont.finish(throwing: Failure.noKey); return }
                 let asked = Date()
                 await self.acquire(.speak)
                 let queued = Date().timeIntervalSince(asked)
                 let started = Date()
                 var firstAudio: Double?
-                let call = CallLabel(provider: c.provider.id.rawValue, model: voiceModel, role: "voice")
                 func yield(_ pcm: Data) {
                     if firstAudio == nil { firstAudio = Date().timeIntervalSince(started) }
                     cont.yield(pcm)
                 }
+                let useLocalVV = self.vibeVoiceAvailable && self.ttsEngineMode != "gemini" && (reference == nil || self.vibeVoiceCloneReady || AIKey.read("ling") == nil)
+                if useLocalVV, let vvURL = URL(string: Self.vibeVoiceBase + "/v1/audio/speech") {
+                    let vvCall = CallLabel(provider: "vibevoice", model: (reference != nil || self.ttsEngineMode == "vibevoice-7b") ? "VibeVoice-7B" : "VibeVoice", role: "voice")
+                    var vvReq = URLRequest(url: vvURL)
+                    vvReq.httpMethod = "POST"
+                    vvReq.timeoutInterval = 30
+                    vvReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    var vvBody: [String: Any] = [
+                        "model": (reference != nil || self.ttsEngineMode == "vibevoice-7b") ? "VibeVoice-7B" : "VibeVoice-Realtime-0.5B",
+                        "input": text,
+                        "response_format": "pcm",
+                        "sample_rate": 24000,
+                        "stream": true,
+                        "stream_format": "sse",
+                    ]
+                    if let reference {
+                        vvBody["references"] = [["audio": reference.audio, "text": reference.text]]
+                        vvBody["voice"] = "clone"
+                    } else if let voice {
+                        vvBody["voice"] = voice
+                    }
+                    if let language { vvBody["language_id"] = language }
+                    vvReq.httpBody = try? JSONSerialization.data(withJSONObject: vvBody)
+                    do {
+                        let (bytes, response) = try await self.session.bytes(for: vvReq)
+                        if (response as? HTTPURLResponse)?.statusCode == 200 {
+                            for try await line in bytes.lines {
+                                guard line.hasPrefix("data:"),
+                                      let obj = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any]
+                                else { continue }
+                                if obj["type"] as? String == "speech.audio.done" { break }
+                                if let b64 = obj["audio"] as? String, let pcm = Data(base64Encoded: b64), !pcm.isEmpty {
+                                    yield(pcm)
+                                }
+                            }
+                            self.report(vvCall, .speak, at: started, queued: queued, outcome: "ok", chars: text.count, firstAudio: firstAudio)
+                            cont.finish()
+                            return
+                        }
+                    } catch {
+                        debugLog("vibevoice speech fallback: \(error)")
+                    }
+                }
+                guard let key = self.key else { cont.finish(throwing: Failure.noKey); return }
+                let c = self.config()
+                guard let base = c.voiceBase, let voiceModel = c.voiceModel else { cont.finish(throwing: Failure.noKey); return }
+                let call = CallLabel(provider: c.provider.id.rawValue, model: voiceModel, role: "voice")
                 if self.isGenAIBridge, (reference == nil || AIKey.read("ling") == nil) {
                     let gemVoice: String
                     switch voice {
@@ -937,7 +1005,8 @@ final class LingClient: ObservableObject {
                 var req = URLRequest(url: base.appendingPathComponent("audio/speech"))
                 req.httpMethod = "POST"
                 req.timeoutInterval = 20
-                if !key.isEmpty { req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+                let realKey = (reference != nil ? (AIKey.read("ling") ?? key) : key)
+                if !realKey.isEmpty { req.setValue("Bearer \(realKey)", forHTTPHeaderField: "Authorization") }
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 var body: [String: Any] = ["model": voiceModel, "input": text, "response_format": "pcm"]
                 if c.provider.id == .ling {

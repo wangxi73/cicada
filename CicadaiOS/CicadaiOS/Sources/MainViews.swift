@@ -651,13 +651,33 @@ extension CicadaRootView {
                         }
 
                         HStack {
-                            Text("同传语音音色 (Gemini TTS)").font(.system(size: 13, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("同传语音引擎").font(.system(size: 13, weight: .semibold))
+                                Text(vm.genai.vibeVoiceAvailable ? "● Mac VibeVoice (:3000) 已就绪" : "Mac VibeVoice 未连接，使用 Gemini / 系统")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(vm.genai.vibeVoiceAvailable ? CicadaPalette.ok : CicadaPalette.tertiary)
+                            }
+                            Spacer()
+                            Picker("引擎", selection: $vm.genai.ttsEngine) {
+                                Text("自动 (VibeVoice + Gemini)").tag("vibevoice-auto")
+                                Text("Mac VibeVoice 0.5B").tag("vibevoice-05b")
+                                Text("Mac VibeVoice 7B").tag("vibevoice-7b")
+                                Text("Gemini Flash TTS").tag("gemini")
+                            }
+                        }
+
+                        HStack {
+                            Text("同传语音音色").font(.system(size: 13, weight: .semibold))
                             Spacer()
                             Picker("音色", selection: $vm.ttsVoice) {
                                 Text("Kore (女·清亮)").tag("Kore")
                                 Text("Aoede (女·温和)").tag("Aoede")
                                 Text("Puck (男·自然)").tag("Puck")
                                 Text("Charon (男·沉稳)").tag("Charon")
+                                Text("Emma (VibeVoice 女)").tag("en-Emma_woman")
+                                Text("Carter (VibeVoice 男)").tag("en-Carter_man")
+                                Text("欣然 (VibeVoice 7B 女)").tag("zh-Xinran_woman")
+                                Text("博文 (VibeVoice 7B 男)").tag("zh-Bowen_man")
                             }
                         }
 

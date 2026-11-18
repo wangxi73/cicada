@@ -741,10 +741,15 @@ struct AISettingsView: View {
                      note: fixOn ? L("随翻译一起发，几乎不多花") : textOn ? L("在“词表”里打开") : later)
         }
         let speaks = ling.speaks && !down
-        usageRow(L("同传声音"), tag: speaks ? uses : L("本机"), style: speaks ? .ok : .off, note: voiceNote(down: down))
-        if provider.clones {
-            usageRow(L("你自己的声音"), tag: on ? uses : ling.hasKey ? L("暂不可用") : L("需要 key"), style: on ? .ok : .off,
-                     note: on ? L("录一段，让对方听到你的音色") : later)
+        usageRow(L("同传声音"),
+                 tag: ling.vibeVoiceAvailable ? L("用 VibeVoice (本机)") : (speaks ? uses : L("本机")),
+                 style: (ling.vibeVoiceAvailable || speaks) ? .ok : .off,
+                 note: ling.vibeVoiceAvailable ? L("Apple M5 Max 本地 24kHz 实时流式合成") : voiceNote(down: down))
+        if ling.clones {
+            usageRow(L("你自己的声音"),
+                     tag: ling.vibeVoiceAvailable ? L("用 VibeVoice 7B") : (on ? uses : ling.hasKey ? L("暂不可用") : L("需要 key")),
+                     style: (ling.vibeVoiceAvailable || on) ? .ok : .off,
+                     note: (ling.vibeVoiceAvailable || on) ? L("录一段，让对方听到你的音色") : later)
         } else {
             usageRow(L("你自己的声音"), tag: L("只有 Ling"), style: .ling, note: L("换用 Ling 才有"))
         }

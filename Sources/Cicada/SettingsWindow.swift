@@ -519,6 +519,25 @@ struct SettingsView: View {
                         model.objectWillChange.send()
                     }
                 }
+                SettingsRow(
+                    title: L("同传语音引擎"),
+                    detail: model.ling.vibeVoiceAvailable ? L("● 本机 VibeVoice (M5 Max · 127.0.0.1:3000) 已就绪") : L("本机 VibeVoice 未运行，当前使用云端或本机声音")
+                ) {
+                    let ttsOptions: [(String, String)] = [
+                        ("vibevoice-auto", L("VibeVoice 本机自动 (0.5B 极速 + 7B 克隆)")),
+                        ("vibevoice-7b", L("VibeVoice 7B (M5 Max bfloat16 高保真)")),
+                        ("vibevoice-05b", L("VibeVoice 0.5B (M5 Max 50ms 极速)")),
+                        ("gemini", L("Gemini Flash TTS (Apple GenAI)")),
+                    ]
+                    PillMenu(
+                        value: ttsOptions.first { $0.0 == settings.ttsEngine }?.1 ?? L("VibeVoice 本机自动 (0.5B 极速 + 7B 克隆)"),
+                        options: ttsOptions
+                    ) {
+                        settings.ttsEngine = $0
+                        model.ling.ttsEngineMode = $0
+                        model.objectWillChange.send()
+                    }
+                }
                 VoiceSection(model: model, settings: settings, ling: model.ling)
             }
             if model.virtualMic != nil { micSettings }

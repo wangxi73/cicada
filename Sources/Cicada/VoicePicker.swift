@@ -79,7 +79,7 @@ struct VoiceSection: View {
     /// "女 · Ming" / "男 · 本机": who it is and where it comes from.
     private func summary(_ v: VoiceOption) -> String {
         switch v.kind {
-        case .ming: return [v.tags.first, "Ming"].compactMap { $0 }.joined(separator: " · ")
+        case .ming: return [v.tags.first, ling.vibeVoiceAvailable ? "VibeVoice" : "Ming"].compactMap { $0 }.joined(separator: " · ")
         case .cloud: return v.tags.joined(separator: " · ")
         case .system: return [v.tags.first, L("本机")].compactMap { $0 }.joined(separator: " · ")
         case .clone: return L("你的音色")
@@ -139,10 +139,10 @@ struct VoiceSection: View {
                 playButton(v.id, highlighted: selected, enabled: usable) { model.previewVoice(v.id, language: language) }
                 Text(v.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     .frame(width: 88, alignment: .leading)
-                Text(usable ? v.tags.prefix(2).joined(separator: " · ") + (v.id.hasPrefix("ming:") ? " · Ming" : "") : L("需要 key"))
+                Text(usable ? v.tags.joined(separator: " · ") : L("需要 key"))
                     .font(.system(size: 12)).foregroundStyle(Palette.secondary).lineLimit(1)
                 Spacer(minLength: 6)
-                Text(v.needsKey ? L("慢约 1 秒") : L("最快")).font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                Text(v.needsKey ? (ling.vibeVoiceAvailable ? L("本机 MPS") : L("慢约 1 秒")) : L("最快")).font(.system(size: 11)).foregroundStyle(Palette.tertiary)
                 Radio(on: selected)
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
@@ -178,7 +178,7 @@ struct VoiceSection: View {
     private var cloneRow: some View {
         let has = VoiceReference.exists && cloneVersion >= 0
         let selected = chosen == "clone"
-        if !ling.provider.clones {
+        if !ling.clones {
             HStack(spacing: 10) {
                 ZStack {
                     Circle().fill(Palette.fill)
@@ -186,7 +186,7 @@ struct VoiceSection: View {
                 }
                 .frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("我自己的声音").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
+                    Text(ling.vibeVoiceAvailable ? L("我自己的声音 (VibeVoice 7B 克隆)") : L("我自己的声音")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
                     Text("只有 Ling 能用你自己的声音").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
                 }
                 Spacer(minLength: 6)
@@ -197,16 +197,24 @@ struct VoiceSection: View {
         } else {
         HStack(spacing: 10) {
             if has {
-                playButton("clone", highlighted: selected, enabled: ling.clones) { model.previewVoice("clone", language: language) }
-            } else {
-                ZStack {
-                    Circle().fill(Palette.accentPale)
-                    Image(systemName: "mic").font(.system(size: 12)).foregroundStyle(Palette.accentInk)
+                playButton("clone", highlighted: selected, enabled: ling.clones) {
+                    model.setVoice("clone", for: language)
+                    model.previewVoice("clone", language: language)
                 }
-                .frame(width: 28, height: 28)
+            } else {
+                Button { if ling.clones { recording = true } } label: {
+                    ZStack {
+                        Circle().fill(Palette.accentPale)
+                        Image(systemName: "mic").font(.system(size: 12)).foregroundStyle(Palette.accentInk)
+                    }
+                    .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("我自己的声音").font(.system(size: 13, weight: .semibold))
+                Text(ling.vibeVoiceAvailable ? L("我自己的声音 (个人音色克隆)") : L("我自己的声音"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
                 if has {
                     HStack(spacing: 4) {
                         Text("已录 \(Int(VoiceReference.duration.rounded())) 秒 · \(VoiceReference.savedIsSlow ? L("读得偏慢") : cloneNote)")
@@ -221,10 +229,19 @@ struct VoiceSection: View {
                     }
                     .font(.system(size: 11)).foregroundStyle(Palette.tertiary).lineLimit(1)
                 } else {
-                    Text("录 15 秒原声，对方听到你的音色，晚约 3 秒").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                    Text("点击录制 15 秒原声，同声传译时让对方听到你本人的音色").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
                 }
             }
-            Spacer(minLength: 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard ling.clones else { return }
+                if has {
+                    model.setVoice("clone", for: language)
+                } else {
+                    recording = true
+                }
+            }
             if has {
                 Button { if ling.clones { model.setVoice("clone", for: language) } } label: { Radio(on: selected) }
                     .buttonStyle(.plain).disabled(!ling.clones)
@@ -235,6 +252,7 @@ struct VoiceSection: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(selected ? Palette.accentWash : Palette.raised)
+        .contentShape(Rectangle())
         }
     }
 
@@ -244,6 +262,9 @@ struct VoiceSection: View {
     }
 
     private var footnote: String {
+        if ling.vibeVoiceAvailable {
+            return L("当前由本机 VibeVoice (Apple M5 Max MPS · 127.0.0.1:3000) 实时流式合成 24kHz 语音；服务未启动时自动回退至 Gemini / 本机声音")
+        }
         if ling.provider.id != .ling { return ling.speaks ? L("\(ling.provider.name) 用不了时，自动换本机声音") : L("这个服务不出声音，用本机声音") }
         return ling.usable ? L("Ling 不可用时自动换成本机声音") : L("填入 Ling key 后可用 Ming 声音和你自己的声音")
     }
@@ -288,6 +309,9 @@ struct VoiceCloneSheet: View {
         .padding(28)
         .frame(width: 560)
         .background(Color.white)
+        .onChange(of: recorder.phase) { _, ph in
+            if ph == .ready { model.setVoice("clone", for: language) }
+        }
         .onDisappear { recorder.cancel(); player?.stop() }
     }
 

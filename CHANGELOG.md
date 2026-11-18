@@ -7,6 +7,11 @@ every platform (one with nothing new says No changes); earlier ones shipped only
 
 ## 1.10.1 — 2026-11-14
 
+### 1.10.1B (Custom) — 2026-11-18
+
+- Mac: Upgraded custom `1.1.0` & `1.1B` onto upstream `v1.10.1` (`genai-bridge`, dual-mode code-switching + live-fix correction, 12s multi-language live notes, local VibeVoice `0.5B` + `7B` voice cloning).
+- iOS (`ios/` & `CicadaiOS/`): Added code-switching toggle, dual-mode correction, speaker voiceprint library, audio recording & playback, and Mac LAN VibeVoice (`:3000`) TTS support.
+
 ### Mac
 
 No changes; released to keep every platform on the same version.

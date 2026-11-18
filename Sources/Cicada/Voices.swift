@@ -58,15 +58,38 @@ enum VoiceCatalog {
         }
         switch key(for: language) {
         case "en":
-            return [v("US_Emma", "Emma", [L("女"), L("美式"), L("自然对话")]), v("UK_George", "George", [L("男"), L("英式"), L("稳重")]),
-                    v("UK_Charlotte", "Charlotte", [L("女"), L("英式"), L("平稳")])]
+            return [
+                v("en-Emma_woman", "Emma", [L("女"), "VibeVoice 0.5B", L("50ms 极速")]),
+                v("en-Carter_man", "Carter", [L("男"), "VibeVoice 0.5B", L("磁性美式")]),
+                v("en-Grace_woman", "Grace", [L("女"), "VibeVoice 0.5B", L("温和清晰")]),
+                v("en-Davis_man", "Davis", [L("男"), "VibeVoice 0.5B", L("沉稳商务")]),
+                v("en-Frank_man", "Frank", [L("男"), "VibeVoice 0.5B", L("播客叙事")]),
+                v("en-Mike_man", "Mike", [L("男"), "VibeVoice 0.5B", L("轻快自然")]),
+                v("en-Alice_woman", "Alice (7B)", [L("女"), "VibeVoice 7B", L("高保真")]),
+                v("en-Maya_woman", "Maya (7B)", [L("女"), "VibeVoice 7B", L("高表现力")]),
+            ]
         case "zh":
-            return [v("灵小雅", "小雅", [L("女"), L("清亮"), L("播报")]), v("灵小棠", "小棠", [L("女"), L("温和"), L("沉稳")]),
-                    v("灵小锋", "小锋", [L("男"), L("温暖"), L("亲切")]), v("灵卓然", "卓然", [L("男"), L("沉着"), L("清楚")])]
-        case "ja", "ko", "de", "fr", "es":
-            return [v("US_Emma", "Emma", [L("女"), "Ming"]), v("UK_George", "George", [L("男"), "Ming"])]
+            return [
+                v("zh-Xinran_woman", "欣然 (7B)", [L("女"), "VibeVoice 7B", L("中文母语")]),
+                v("zh-Bowen_man", "博文 (7B)", [L("男"), "VibeVoice 7B", L("中文母语")]),
+                v("zh-Anchen_man_bgm", "安辰 (7B)", [L("男"), "VibeVoice 7B", L("沉稳播客")]),
+                v("en-Emma_woman", "Emma (0.5B)", [L("女"), "VibeVoice 0.5B", L("50ms 极速")]),
+                v("en-Carter_man", "Carter (0.5B)", [L("男"), "VibeVoice 0.5B", L("50ms 极速")]),
+            ]
+        case "ja":
+            return [v("jp-Spk1_woman", "Sakura", [L("女"), "VibeVoice"]), v("jp-Spk0_man", "Ken", [L("男"), "VibeVoice"])]
+        case "ko":
+            return [v("kr-Spk0_woman", "Jiyeon", [L("女"), "VibeVoice"]), v("kr-Spk1_man", "Minho", [L("男"), "VibeVoice"])]
+        case "de":
+            return [v("de-Spk1_woman", "Clara", [L("女"), "VibeVoice"]), v("de-Spk0_man", "Lukas", [L("男"), "VibeVoice"])]
+        case "fr":
+            return [v("fr-Spk1_woman", "Chloé", [L("女"), "VibeVoice"]), v("fr-Spk0_man", "Lucas", [L("男"), "VibeVoice"])]
+        case "es":
+            return [v("sp-Spk0_woman", "Sofía", [L("女"), "VibeVoice"]), v("sp-Spk1_man", "Mateo", [L("男"), "VibeVoice"])]
+        case "pt":
+            return [v("pt-Spk0_woman", "Camila", [L("女"), "VibeVoice"]), v("pt-Spk1_man", "Rafael", [L("男"), "VibeVoice"])]
         default:
-            return []
+            return [v("en-Emma_woman", "Emma", [L("女"), "VibeVoice"]), v("en-Carter_man", "Carter", [L("男"), "VibeVoice"])]
         }
     }
 
@@ -405,15 +428,14 @@ final class VoiceRecorder: ObservableObject {
         phase = .checking
         let url = url, locale = locale
         Task {
-            let text = await Self.transcribe(url, locale: locale)
+            var text = await Self.transcribe(url, locale: locale)
+            if text.count < 6 {
+                text = VoiceReference.passage(for: locale)
+            }
             self.transcript = text
-            guard text.count >= 6 else { self.phase = .failed(L("没听清录音内容，请换个安静的地方再录一次")); return }
             let pace = VoiceReference.pace(of: url, text: text)
             debugLog("voice clone: \(text.count) chars, pace \(pace.map { String(format: "%.1f", $0) } ?? "-")/s")
-            if let pace, VoiceReference.isSlow(text: text, pace: pace) {
-                self.phase = .failed(L("读得有点慢，克隆的声音也会这么慢。请用平时说话的语速再录一次"))
-                return
-            }
+            try? VoiceReference.save(wav: url, text: text)
             self.phase = .ready
         }
     }

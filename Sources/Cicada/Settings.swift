@@ -67,6 +67,9 @@ final class AppSettings: ObservableObject {
     @Published var recordAudio: Bool {
         didSet { save() }
     }
+    @Published var ttsEngine: String {
+        didSet { save() }
+    }
     /// 存到文件夹: settled meetings are also written as Markdown into `exportFolder` (a path; empty
     /// until one is chosen). Not a secret: it may sit in UserDefaults.
     @Published var exportOn: Bool {
@@ -306,6 +309,7 @@ final class AppSettings: ObservableObject {
         speakMic = defaults.string(forKey: "speakMic") ?? ""
         savedSystemInput = defaults.string(forKey: "savedSystemInput") ?? ""
         recordAudio = defaults.object(forKey: "recordAudio") as? Bool ?? true
+        ttsEngine = defaults.string(forKey: "ttsEngine") ?? "vibevoice-auto"
         exportOn = defaults.bool(forKey: "exportOn")
         exportFolder = defaults.string(forKey: "exportFolder") ?? ""
         importLanguage = defaults.string(forKey: "importLanguage") ?? "auto"
@@ -372,6 +376,7 @@ final class AppSettings: ObservableObject {
         defaults.set(speakMic, forKey: "speakMic")
         defaults.set(savedSystemInput, forKey: "savedSystemInput")
         defaults.set(recordAudio, forKey: "recordAudio")
+        defaults.set(ttsEngine, forKey: "ttsEngine")
         defaults.set(exportOn, forKey: "exportOn")
         defaults.set(exportFolder, forKey: "exportFolder")
         defaults.set(importLanguage, forKey: "importLanguage")

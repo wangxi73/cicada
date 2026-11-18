@@ -552,7 +552,7 @@ extension CicadaMobileViewModel {
     }
 
     private func speakOut(_ text: String, langId: String) async {
-        if let wavData = await genai.synthesizeWAV(text, voiceName: ttsVoice) {
+        if let wavData = await genai.synthesizeWAV(text, voiceName: ttsVoice, language: langId) {
             let finalWAV = Self.ensureWAVHeader(wavData, sampleRate: 24000)
             if let p = try? AVAudioPlayer(data: finalWAV) {
                 self.player = p

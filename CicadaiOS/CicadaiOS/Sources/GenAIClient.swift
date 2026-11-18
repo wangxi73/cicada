@@ -28,6 +28,10 @@ final class GenAIClient: ObservableObject {
     @Published var connectionStatus: String = "准备就绪 · Apple VPN Floodgate"
     @Published var activeRouteLabel: String = "Floodgate Direct"
     @Published var lastLatencyMs: Int?
+    @Published var ttsEngine: String {
+        didSet { UserDefaults.standard.set(ttsEngine, forKey: "ttsEngine") }
+    }
+    @Published var vibeVoiceAvailable: Bool = false
 
     static let models = ["gemini-3.8-flash", "gemini-3.7-flash", "Ling-3.1-flash"]
     static let quickHosts = [
@@ -50,6 +54,7 @@ final class GenAIClient: ObservableObject {
         self.floodgateToken = savedFG.isEmpty ? Self.embeddedFloodgateToken : savedFG
         let savedLing = UserDefaults.standard.string(forKey: "lingKey") ?? ""
         self.lingKey = savedLing.isEmpty ? Self.embeddedLingKey : savedLing
+        self.ttsEngine = UserDefaults.standard.string(forKey: "ttsEngine") ?? "vibevoice-auto"
         Task { await refreshFloodgateTokenAndProbe() }
     }
 
@@ -69,6 +74,7 @@ final class GenAIClient: ObservableObject {
     func refreshFloodgateTokenAndProbe() async {
         let started = Date()
         let bridge = Self.normalizeBridgeURL(macBridgeURL)
+        Task { await probeVibeVoice() }
         if let url = URL(string: bridge + "/api/floodgate-token") {
             var req = URLRequest(url: url)
             req.timeoutInterval = 2.5
@@ -310,12 +316,73 @@ extension GenAIClient {
         return lines.compactMap { $0.first as? String }.joined()
     }
 
-    func synthesizeWAV(_ text: String, voiceName: String = "Kore") async -> Data? {
+    var vibeVoiceBaseURL: String? {
+        let bridge = Self.normalizeBridgeURL(macBridgeURL)
+        guard var comps = URLComponents(string: bridge), let host = comps.host, !host.isEmpty else { return nil }
+        comps.port = 3000
+        comps.path = ""
+        return comps.string
+    }
+
+    private func probeVibeVoice() async {
+        guard let base = vibeVoiceBaseURL, let url = URL(string: base + "/health") else {
+            vibeVoiceAvailable = false
+            return
+        }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 1.5
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            vibeVoiceAvailable = false
+            return
+        }
+        vibeVoiceAvailable = true
+    }
+
+    func synthesizeWAV(_ text: String, voiceName: String = "Kore", language: String? = nil) async -> Data? {
+        if ttsEngine != "gemini", vibeVoiceAvailable, let base = vibeVoiceBaseURL,
+           let vvURL = URL(string: base + "/v1/audio/speech") {
+            let vvVoice: String
+            switch voiceName {
+            case "Kore": vvVoice = (language == "zh" ? "zh-Xinran_woman" : "en-Emma_woman")
+            case "Aoede": vvVoice = (language == "zh" ? "zh-Xinran_woman" : "en-Grace_woman")
+            case "Puck": vvVoice = (language == "zh" ? "zh-Bowen_man" : "en-Carter_man")
+            case "Charon": vvVoice = (language == "zh" ? "zh-Anchen_man_bgm" : "en-Davis_man")
+            default: vvVoice = voiceName
+            }
+            let use7B = ttsEngine == "vibevoice-7b" || vvVoice.hasPrefix("zh-") || vvVoice.contains("Alice") || vvVoice.contains("Maya")
+            var vvBody: [String: Any] = [
+                "model": use7B ? "VibeVoice-7B" : "VibeVoice-Realtime-0.5B",
+                "input": text,
+                "voice": vvVoice,
+                "response_format": "pcm",
+                "sample_rate": 24000,
+                "stream": false
+            ]
+            if let language { vvBody["language_id"] = language }
+            var vvReq = URLRequest(url: vvURL)
+            vvReq.httpMethod = "POST"
+            vvReq.timeoutInterval = 20
+            vvReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            vvReq.httpBody = try? JSONSerialization.data(withJSONObject: vvBody)
+            if let (data, resp) = try? await URLSession.shared.data(for: vvReq),
+               (resp as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty {
+                return data
+            }
+        }
+        let gemVoice: String
+        switch voiceName {
+        case "Kore", "Aoede", "Puck", "Charon": gemVoice = voiceName
+        case "en-Grace_woman": gemVoice = "Aoede"
+        case "en-Carter_man", "zh-Bowen_man": gemVoice = "Puck"
+        case "en-Davis_man", "zh-Anchen_man_bgm": gemVoice = "Charon"
+        default: gemVoice = "Kore"
+        }
         let body: [String: Any] = [
             "contents": [["role": "user", "parts": [["text": text]]]],
             "generationConfig": [
                 "responseModalities": ["AUDIO"],
-                "speechConfig": ["voiceConfig": ["prebuiltVoiceConfig": ["voiceName": voiceName]]]
+                "speechConfig": ["voiceConfig": ["prebuiltVoiceConfig": ["voiceName": gemVoice]]]
             ]
         ]
         let endpoints: [(String, String?)] = [
