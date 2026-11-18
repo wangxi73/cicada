@@ -9,6 +9,15 @@ final class CicadaMobileViewModel: ObservableObject {
     @Published var isListening = false
     @Published var webexMixMode = true
     @Published var speakerVoicesEnabled = true
+    @Published var fixMisheard: Bool = UserDefaults.standard.object(forKey: "fixMisheard") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(fixMisheard, forKey: "fixMisheard") }
+    }
+    @Published var askNames: Bool = UserDefaults.standard.object(forKey: "askNames") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(askNames, forKey: "askNames") }
+    }
+    @Published var codeSwitchRefine: Bool = UserDefaults.standard.object(forKey: "codeSwitchRefine") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(codeSwitchRefine, forKey: "codeSwitchRefine") }
+    }
     private let speakerTagger = MobileSpeakerTagger()
     @Published var replayKitActive = false
     @Published var isInterpretingHold = false
@@ -38,6 +47,11 @@ final class CicadaMobileViewModel: ObservableObject {
     @Published var updatingNotes = false
     @Published var currentSession = MeetingSession()
     @Published var history: [MeetingSession] = []
+    @Published var vocabulary: [WordTermItem] = []
+    @Published var speakerProfiles: [SpeakerProfileItem] = []
+    @Published var isPlayingAudio = false
+    @Published var playbackTime: TimeInterval = 0
+    @Published var playbackDuration: TimeInterval = 0
 
     private let audioEngine = AVAudioEngine()
     private var notesTimer: Timer?
@@ -48,12 +62,17 @@ final class CicadaMobileViewModel: ObservableObject {
     private var vadVoicedFrames = 0
     private var vadSilenceFrames = 0
     private var holdSamples: [Int16] = []
+    private var meetingAudioSamples: [Int16] = []
 
     private var player: AVAudioPlayer?
+    private var sessionPlayer: AVAudioPlayer?
+    private var playbackTimer: Timer?
     private let synth = AVSpeechSynthesizer()
 
     init() {
         loadHistory()
+        loadVocabulary()
+        loadSpeakerProfiles()
     }
 
     func toggleListening() {
@@ -79,9 +98,10 @@ final class CicadaMobileViewModel: ObservableObject {
         vadSamples.removeAll()
         vadVoicedFrames = 0
         vadSilenceFrames = 0
+        meetingAudioSamples.removeAll()
         startPureAudioTap()
         notesTimer?.invalidate()
-        notesTimer = Timer.scheduledTimer(withTimeInterval: 35, repeats: true) { [weak self] _ in
+        notesTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateNotesNow() }
         }
     }
@@ -93,6 +113,14 @@ final class CicadaMobileViewModel: ObservableObject {
         stopPureAudioTap()
         liveSourceVolatile = ""
         currentSession.endedAt = Date()
+        if !meetingAudioSamples.isEmpty {
+            let filename = "cicada_audio_\(currentSession.id).wav"
+            let wav = Self.makeWAV(samples16kMono: meetingAudioSamples)
+            let url = audioURL(filename: filename)
+            try? wav.write(to: url)
+            currentSession.audioFilename = filename
+            meetingAudioSamples.removeAll()
+        }
         if !currentSession.lines.isEmpty {
             updateNotesNow()
             saveCurrentSession()
@@ -137,6 +165,7 @@ final class CicadaMobileViewModel: ObservableObject {
                         self.holdSamples.append(contentsOf: downsampled)
                     }
                 } else if self.isListening {
+                    self.meetingAudioSamples.append(contentsOf: downsampled)
                     self.processVADChunk(downsampled, rms: rms)
                 }
             }
@@ -193,31 +222,261 @@ final class CicadaMobileViewModel: ObservableObject {
 
         let src = sourceLang
         let dst = targetLang
-        let srcEng = supportedLanguages.first { $0.id == src }?.englishName ?? src
-        let dstEng = supportedLanguages.first { $0.id == dst }?.englishName ?? dst
         let glossary = currentSession.notes.terms.map(\.name)
+        let words = vocabulary.map { $0.heard.isEmpty ? $0.word : "\($0.word) (misheard: \($0.heard.joined(separator: ", ")))" }
+        let recent = currentSession.lines.filter { $0.id != lineID && $0.sourceText != "正在识别…" }.suffix(3).map(\.shownSourceText)
+        let useCodeSwitch = codeSwitchRefine
+        let useFixes = fixMisheard
+        let askUnknown = askNames
 
         Task {
-            var sys = "You are a live meeting transcriber and interpreter. Listen to the audio and transcribe what is spoken (primarily \(srcEng) or Chinese/English), then translate it into \(dstEng). If the audio is only silence or background noise, reply NONE."
-            if !glossary.isEmpty { sys += "\nGlossary: " + glossary.joined(separator: "; ") }
-            let inst = """
-            If clear speech is heard, reply in exactly two lines:
-            ORIGINAL: <exact transcription>
-            TRANSLATION: <translation into \(dstEng)>
-            If no speech or only noise, reply: NONE
-            """
-            if let reply = await genai.chat(system: sys, instruction: inst, json: false, audioWAV: wav, maxTokens: 500),
-               let parsed = Self.parseTwoLines(reply) {
+            if let result = await genai.transcribeAndTranslate(
+                audioWAV: wav, sourceLang: src, targetLang: dst,
+                glossary: glossary, wordList: words, recent: recent,
+                codeSwitchRefine: useCodeSwitch, fixMisheard: useFixes
+            ) {
                 if let idx = currentSession.lines.firstIndex(where: { $0.id == lineID }) {
-                    currentSession.lines[idx].sourceText = parsed.0
-                    currentSession.lines[idx].translatedText = parsed.1
+                    currentSession.lines[idx].sourceText = result.source
+                    currentSession.lines[idx].translatedText = result.translation
+                    var lineFixes = result.fixes.map { f -> LineFixItem in
+                        var item = f
+                        if !askUnknown { item.ask = nil }
+                        return item
+                    }
+                    if useFixes {
+                        lineFixes = mergeKnownFixes(source: result.source, existing: lineFixes)
+                    }
+                    currentSession.lines[idx].fixes = lineFixes.isEmpty ? nil : lineFixes
                     saveCurrentSession()
                 }
-                if currentSession.lines.count == 2 || currentSession.lines.count % 5 == 0 {
+                if currentSession.lines.count == 1 || currentSession.lines.count % 3 == 0 {
                     updateNotesNow()
                 }
             } else {
                 currentSession.lines.removeAll { $0.id == lineID }
+            }
+        }
+    }
+}
+
+extension CicadaMobileViewModel {
+    private var vocabularyURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("cicada_vocabulary.json")
+    }
+
+    private var profilesURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("cicada_speaker_profiles.json")
+    }
+
+    func audioURL(filename: String) -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(filename)
+    }
+
+    func loadVocabulary() {
+        guard let data = try? Data(contentsOf: vocabularyURL),
+              let saved = try? JSONDecoder().decode([WordTermItem].self, from: data) else { return }
+        vocabulary = saved
+    }
+
+    func saveVocabulary() {
+        if let data = try? JSONEncoder().encode(vocabulary) {
+            try? data.write(to: vocabularyURL)
+        }
+    }
+
+    func addVocabulary(word: String, heard: String = "") {
+        let clean = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        let heardClean = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let idx = vocabulary.firstIndex(where: { $0.word.caseInsensitiveCompare(clean) == .orderedSame }) {
+            if !heardClean.isEmpty, !vocabulary[idx].heard.contains(heardClean) {
+                vocabulary[idx].heard.append(heardClean)
+            }
+            vocabulary[idx].usedCount += 1
+        } else {
+            vocabulary.insert(WordTermItem(word: clean, heard: heardClean.isEmpty ? [] : [heardClean]), at: 0)
+        }
+        saveVocabulary()
+    }
+
+    func importVocabularyText(_ text: String) {
+        let parts = text.components(separatedBy: CharacterSet(charactersIn: "\n,;，；"))
+        for p in parts { addVocabulary(word: p) }
+    }
+
+    func removeVocabulary(word: String) {
+        vocabulary.removeAll { $0.word == word }
+        saveVocabulary()
+    }
+
+    private func mergeKnownFixes(source: String, existing: [LineFixItem]) -> [LineFixItem] {
+        var out = existing
+        for term in vocabulary {
+            for h in term.heard where h.count >= 2 && source.contains(h) {
+                if !out.contains(where: { $0.from == h }) {
+                    out.append(LineFixItem(from: h, to: term.word, confidence: 1.0))
+                }
+            }
+        }
+        return out
+    }
+
+    var pendingAskFix: (lineID: Int, fix: LineFixItem)? {
+        for l in currentSession.lines {
+            if let f = l.fixes?.first(where: { $0.ask == true && $0.off != true }) {
+                return (l.id, f)
+            }
+        }
+        return nil
+    }
+
+    func answerFix(_ fix: LineFixItem, accept: Bool) {
+        if accept { addVocabulary(word: fix.to, heard: fix.from) }
+        for i in currentSession.lines.indices {
+            guard var fixes = currentSession.lines[i].fixes else { continue }
+            for j in fixes.indices where fixes[j].from == fix.from && fixes[j].to == fix.to {
+                if accept {
+                    fixes[j].ask = nil
+                    fixes[j].user = true
+                } else {
+                    fixes[j].ask = nil
+                    fixes[j].off = true
+                }
+            }
+            currentSession.lines[i].fixes = fixes
+        }
+        saveCurrentSession()
+    }
+
+    func revertFix(_ fix: LineFixItem, lineID: Int) {
+        guard let i = currentSession.lines.firstIndex(where: { $0.id == lineID }),
+              var fixes = currentSession.lines[i].fixes else { return }
+        for j in fixes.indices where fixes[j].from == fix.from && fixes[j].to == fix.to {
+            fixes[j].off = true
+            fixes[j].ask = nil
+        }
+        currentSession.lines[i].fixes = fixes
+        saveCurrentSession()
+    }
+
+    func editLineSource(lineID: Int, newText: String) {
+        let clean = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let i = currentSession.lines.firstIndex(where: { $0.id == lineID }) else { return }
+        let oldShown = currentSession.lines[i].shownSourceText
+        guard clean != oldShown else { return }
+        let f = LineFixItem(from: oldShown, to: clean, confidence: 1.0, user: true)
+        var list = currentSession.lines[i].fixes ?? []
+        list.append(f)
+        currentSession.lines[i].fixes = list
+        saveCurrentSession()
+    }
+
+    func loadSpeakerProfiles() {
+        guard let data = try? Data(contentsOf: profilesURL),
+              let saved = try? JSONDecoder().decode([SpeakerProfileItem].self, from: data) else { return }
+        speakerProfiles = saved
+        speakerTagger.setSavedProfiles(saved)
+    }
+
+    func saveSpeakerProfiles() {
+        if let data = try? JSONEncoder().encode(speakerProfiles) {
+            try? data.write(to: profilesURL)
+        }
+        speakerTagger.setSavedProfiles(speakerProfiles)
+    }
+
+    func renameSpeaker(rawLabel: String, to newName: String) {
+        let clean = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        var map = currentSession.speakerNames ?? [:]
+        map[rawLabel] = clean
+        currentSession.speakerNames = map
+        saveCurrentSession()
+        speakerTagger.centroid(for: rawLabel) { [weak self] centroid in
+            guard let self, let centroid else { return }
+            if let idx = self.speakerProfiles.firstIndex(where: { $0.name == clean }) {
+                self.speakerProfiles[idx].centroid = centroid
+                self.speakerProfiles[idx].sampleCount += 1
+            } else {
+                self.speakerProfiles.append(SpeakerProfileItem(name: clean, centroid: centroid))
+            }
+            self.saveSpeakerProfiles()
+        }
+    }
+
+    func deleteSpeakerProfile(_ id: String) {
+        speakerProfiles.removeAll { $0.id == id }
+        saveSpeakerProfiles()
+    }
+
+    func saveEditedNotes(title: String, summary: String, topics: [NoteTopicItem]) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanTitle.isEmpty {
+            currentSession.title = cleanTitle
+            currentSession.notes.title = cleanTitle
+        }
+        currentSession.notes.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentSession.notes.topics = topics
+        saveCurrentSession()
+    }
+
+    func toggleAudioPlayback(for session: MeetingSession) {
+        if isPlayingAudio {
+            sessionPlayer?.pause()
+            isPlayingAudio = false
+            playbackTimer?.invalidate()
+            return
+        }
+        guard let filename = session.audioFilename else { return }
+        let url = audioURL(filename: filename)
+        if sessionPlayer?.url != url {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            guard let p = try? AVAudioPlayer(contentsOf: url) else { return }
+            sessionPlayer = p
+            playbackDuration = p.duration
+        }
+        sessionPlayer?.play()
+        isPlayingAudio = true
+        playbackTimer?.invalidate()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let p = self.sessionPlayer else { return }
+                self.playbackTime = p.currentTime
+                if !p.isPlaying {
+                    self.isPlayingAudio = false
+                    self.playbackTimer?.invalidate()
+                }
+            }
+        }
+    }
+
+    func seekAudio(for session: MeetingSession, to time: TimeInterval) {
+        guard let filename = session.audioFilename else { return }
+        let url = audioURL(filename: filename)
+        if sessionPlayer?.url != url {
+            guard let p = try? AVAudioPlayer(contentsOf: url) else { return }
+            sessionPlayer = p
+            playbackDuration = p.duration
+        }
+        sessionPlayer?.currentTime = max(0, min(time, sessionPlayer?.duration ?? time))
+        playbackTime = sessionPlayer?.currentTime ?? 0
+        if !isPlayingAudio {
+            sessionPlayer?.play()
+            isPlayingAudio = true
+            playbackTimer?.invalidate()
+            playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, let p = self.sessionPlayer else { return }
+                    self.playbackTime = p.currentTime
+                    if !p.isPlaying {
+                        self.isPlayingAudio = false
+                        self.playbackTimer?.invalidate()
+                    }
+                }
             }
         }
     }

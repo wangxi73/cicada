@@ -38,6 +38,45 @@ struct TranscriptLine: Identifiable, Codable, Equatable {
     var sourceText: String
     var translatedText: String
     var isMe: Bool
+    var fixes: [LineFixItem]? = nil
+
+    var shownSourceText: String {
+        guard let fixes, !fixes.isEmpty else { return sourceText }
+        var out = sourceText
+        for f in fixes where f.applied {
+            if !f.from.isEmpty, out.contains(f.from) {
+                out = out.replacingOccurrences(of: f.from, with: f.to)
+            }
+        }
+        return out
+    }
+}
+
+struct LineFixItem: Identifiable, Codable, Equatable {
+    var id: String { "\(from)->\(to)" }
+    var from: String
+    var to: String
+    var confidence: Double = 0.9
+    var ask: Bool? = nil
+    var off: Bool? = nil
+    var user: Bool? = nil
+
+    var applied: Bool { ask != true && off != true }
+}
+
+struct WordTermItem: Identifiable, Codable, Equatable {
+    var id: String { word.lowercased() }
+    var word: String
+    var heard: [String] = []
+    var addedAt: Date = Date()
+    var usedCount: Int = 0
+}
+
+struct SpeakerProfileItem: Identifiable, Codable, Equatable {
+    var id: String = UUID().uuidString
+    var name: String
+    var centroid: [Float]
+    var sampleCount: Int = 1
 }
 
 struct NoteTopicItem: Identifiable, Codable, Equatable {
@@ -87,4 +126,11 @@ struct MeetingSession: Identifiable, Codable, Equatable {
     var targetLang: String = "zh-CN"
     var lines: [TranscriptLine] = []
     var notes: MeetingNotesData = MeetingNotesData()
+    var audioFilename: String? = nil
+    var speakerNames: [String: String]? = nil
+
+    func displaySpeaker(for line: TranscriptLine) -> String {
+        if line.isMe { return line.speaker }
+        return speakerNames?[line.speaker] ?? line.speaker
+    }
 }

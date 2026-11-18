@@ -33,6 +33,7 @@ final class GenAIClient: ObservableObject {
     static let quickHosts = [
         ("17.87.15.76", "http://17.87.15.76:11213"),
         ("Mac.local", "http://xis-MacBook-Pro.local:11213"),
+        ("Mac :11211", "http://xis-MacBook-Pro.local:11211"),
         ("10.0.1.66", "http://10.0.1.66:11213"),
         ("192.168.1.1", "http://192.168.1.1:11213")
     ]
@@ -246,6 +247,51 @@ extension GenAIClient {
             return out
         }
         return await googleTranslateFallback(text, to: to) ?? text
+    }
+
+    func transcribeAndTranslate(audioWAV: Data, sourceLang: String, targetLang: String,
+                                glossary: [String], wordList: [String], recent: [String],
+                                codeSwitchRefine: Bool, fixMisheard: Bool) async -> (source: String, translation: String, fixes: [LineFixItem])? {
+        let srcEng = supportedLanguages.first { $0.id == sourceLang }?.englishName ?? sourceLang
+        let dstEng = supportedLanguages.first { $0.id == targetLang }?.englishName ?? targetLang
+        var sys = "You are a live meeting transcriber and interpreter. Listen to the audio and transcribe what is spoken (primarily \(srcEng) or Chinese/English), then translate it into \(dstEng)."
+        if codeSwitchRefine {
+            sys += "\nClean up misheard code-switched English/Chinese homophones (e.g. \"派普兰\" -> \"pipeline\", \"外贝克斯\" -> \"Webex\", \"阿赖\" -> \"align\", \"欧凯\" -> \"OK\") and verbal stutters in \"original\"."
+        }
+        if fixMisheard {
+            sys += "\nAlso point out any remaining misheard words or names in \"fixes\" with confidence 0.0-1.0."
+        }
+        if !wordList.isEmpty { sys += "\nKnown word list (preferred spellings): " + wordList.joined(separator: "; ") }
+        if !glossary.isEmpty { sys += "\nMeeting terms: " + glossary.joined(separator: "; ") }
+        if !recent.isEmpty { sys += "\nRecent lines:\n" + recent.suffix(3).joined(separator: "\n") }
+        let jsonShape = fixMisheard
+            ? #"{"speech": true, "original": "...", "translation": "...", "fixes": [{"from": "...", "to": "...", "confidence": 0.9}]}"#
+            : #"{"speech": true, "original": "...", "translation": "..."}"#
+        let inst = """
+        If the audio is only silence or background noise, reply {"speech": false}.
+        Otherwise reply ONLY with JSON: \(jsonShape)
+        """
+        guard let reply = await chat(system: sys, instruction: inst, json: true, audioWAV: audioWAV, maxTokens: 600),
+              let data = reply.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let speech = obj["speech"] as? Bool, !speech { return nil }
+        let orig = (obj["original"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trans = (obj["translation"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !orig.isEmpty, orig.uppercased() != "NONE", !trans.isEmpty else { return nil }
+        var fixes: [LineFixItem] = []
+        if fixMisheard, let rawFixes = obj["fixes"] as? [[String: Any]] {
+            for item in rawFixes {
+                guard let from = (item["from"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      let to = (item["to"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !from.isEmpty, !to.isEmpty, from != to, orig.contains(from) else { continue }
+                let conf = (item["confidence"] as? NSNumber)?.doubleValue ?? 0.7
+                if conf < 0.6 { continue }
+                let known = wordList.contains { $0.localizedCaseInsensitiveContains(to) }
+                let ask = !known && conf < 0.88
+                fixes.append(LineFixItem(from: from, to: to, confidence: conf, ask: ask ? true : nil))
+            }
+        }
+        return (orig, trans, fixes)
     }
 
     private func googleTranslateFallback(_ text: String, to: String) async -> String? {

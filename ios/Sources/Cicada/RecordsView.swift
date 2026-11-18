@@ -285,7 +285,7 @@ struct SearchView: View {
         guard !q.isEmpty else { return sessions }
         return sessions.filter { s in
             s.displayTitle.localizedCaseInsensitiveContains(q)
-                || s.lines.contains { $0.src.localizedCaseInsensitiveContains(q) || ($0.dst?.localizedCaseInsensitiveContains(q) ?? false) }
+                || s.lines.contains { $0.shown.localizedCaseInsensitiveContains(q) || ($0.dst?.localizedCaseInsensitiveContains(q) ?? false) }
         }
     }
 

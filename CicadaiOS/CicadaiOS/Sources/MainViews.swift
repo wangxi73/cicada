@@ -6,6 +6,15 @@ struct CicadaRootView: View {
     @StateObject private var vm = CicadaMobileViewModel()
     @State private var selectedTab = 0
     @State private var shareText: String?
+    @State private var editingLine: TranscriptLine?
+    @State private var lineDraft = ""
+    @State private var renamingSpeaker: String?
+    @State private var speakerDraft = ""
+    @State private var isEditingNotes = false
+    @State private var notesTitleDraft = ""
+    @State private var notesSummaryDraft = ""
+    @State private var newWordDraft = ""
+    @State private var newHeardDraft = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +33,22 @@ struct CicadaRootView: View {
             holdToTalkBar
         }
         .background(CicadaPalette.ground.ignoresSafeArea())
+        .alert("修改原话", isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
+            TextField("原文", text: $lineDraft)
+            Button("保存") {
+                if let line = editingLine { vm.editLineSource(lineID: line.id, newText: lineDraft) }
+                editingLine = nil
+            }
+            Button("取消", role: .cancel) { editingLine = nil }
+        }
+        .alert("重命名说话人", isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+            TextField("姓名", text: $speakerDraft)
+            Button("保存并记住声纹") {
+                if let raw = renamingSpeaker { vm.renameSpeaker(rawLabel: raw, to: speakerDraft) }
+                renamingSpeaker = nil
+            }
+            Button("取消", role: .cancel) { renamingSpeaker = nil }
+        }
     }
 
     private var headerBar: some View {
@@ -164,6 +189,40 @@ struct CicadaRootView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
+                    if let ask = vm.pendingAskFix {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("这样改对吗？").font(.system(size: 13, weight: .bold)).foregroundStyle(CicadaPalette.ink)
+                            Text("\(ask.fix.from) → \(ask.fix.to)").font(.system(size: 15, weight: .semibold)).foregroundStyle(CicadaPalette.accent)
+                            HStack(spacing: 8) {
+                                Button("对（整场并记住）") { vm.answerFix(ask.fix, accept: true) }
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(Capsule().fill(CicadaPalette.ink))
+                                Button("不对") { vm.answerFix(ask.fix, accept: false) }
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(Capsule().fill(CicadaPalette.ground))
+                            }
+                        }
+                        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(CicadaPalette.accent.opacity(0.4), lineWidth: 1.5))
+                    }
+                    if vm.currentSession.audioFilename != nil && !vm.isListening {
+                        HStack(spacing: 10) {
+                            Button {
+                                vm.toggleAudioPlayback(for: vm.currentSession)
+                            } label: {
+                                Image(systemName: vm.isPlayingAudio ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.system(size: 24)).foregroundStyle(CicadaPalette.accent)
+                            }
+                            Text("会议录音回放 · \(CicadaMobileViewModel.clock(vm.playbackTime))")
+                                .font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(CicadaPalette.ink)
+                            Spacer()
+                            Text("点击句子跳转").font(.system(size: 11)).foregroundStyle(CicadaPalette.tertiary)
+                        }
+                        .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+                    }
                     if vm.currentSession.lines.isEmpty && vm.liveSourceVolatile.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "waveform.and.mic")
@@ -183,23 +242,56 @@ struct CicadaRootView: View {
                     ForEach(vm.currentSession.lines) { line in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Text(line.speaker)
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(line.isMe ? CicadaPalette.accent : CicadaPalette.secondary)
+                                Button {
+                                    if !line.isMe {
+                                        speakerDraft = vm.currentSession.displaySpeaker(for: line)
+                                        renamingSpeaker = line.speaker
+                                    }
+                                } label: {
+                                    Text(vm.currentSession.displaySpeaker(for: line))
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(line.isMe ? CicadaPalette.accent : CicadaPalette.secondary)
+                                }
                                 Text(CicadaMobileViewModel.clock(line.timestamp))
                                     .font(.system(size: 11).monospacedDigit())
                                     .foregroundStyle(CicadaPalette.tertiary)
                                 Spacer()
+                                Button {
+                                    lineDraft = line.shownSourceText
+                                    editingLine = line
+                                } label: {
+                                    Image(systemName: "pencil").font(.system(size: 11)).foregroundStyle(CicadaPalette.tertiary)
+                                }
                             }
-                            Text(line.sourceText)
+                            Text(line.shownSourceText)
                                 .font(.system(size: 14))
                                 .foregroundStyle(CicadaPalette.secondary)
                             Text(line.translatedText)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(CicadaPalette.ink)
+                            if let applied = line.fixes?.filter(\.applied), !applied.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(applied) { f in
+                                            HStack(spacing: 4) {
+                                                Text("\(f.from)→\(f.to)").font(.system(size: 10)).foregroundStyle(CicadaPalette.secondary)
+                                                Button("改回") { vm.revertFix(f, lineID: line.id) }
+                                                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(CicadaPalette.accent)
+                                            }
+                                            .padding(.horizontal, 7).padding(.vertical, 3)
+                                            .background(Capsule().fill(CicadaPalette.ground))
+                                        }
+                                    }
+                                }
+                            }
                         }
                         .padding(14)
                         .background(RoundedRectangle(cornerRadius: 14).fill(line.isMe ? CicadaPalette.accentPale : Color.white))
+                        .onTapGesture {
+                            if vm.currentSession.audioFilename != nil && !vm.isListening {
+                                vm.seekAudio(for: vm.currentSession, to: line.timestamp)
+                            }
+                        }
                         .id(line.id)
                     }
                     if !vm.liveSourceVolatile.isEmpty {
@@ -235,10 +327,31 @@ extension CicadaRootView {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text(vm.currentSession.title)
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(CicadaPalette.ink)
+                    if isEditingNotes {
+                        TextField("会议标题", text: $notesTitleDraft)
+                            .font(.system(size: 17, weight: .bold))
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        Text(vm.currentSession.title)
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(CicadaPalette.ink)
+                    }
                     Spacer()
+                    if !vm.currentSession.notes.isEmpty {
+                        Button(isEditingNotes ? "保存" : "编辑") {
+                            if isEditingNotes {
+                                vm.saveEditedNotes(title: notesTitleDraft, summary: notesSummaryDraft, topics: vm.currentSession.notes.topics)
+                                isEditingNotes = false
+                            } else {
+                                notesTitleDraft = vm.currentSession.title
+                                notesSummaryDraft = vm.currentSession.notes.summary
+                                isEditingNotes = true
+                            }
+                        }
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .background(Capsule().fill(Color.white))
+                    }
                     Menu {
                         ForEach(supportedLanguages) { lang in
                             Button(lang.name) { vm.notesLang = lang.id }
@@ -279,10 +392,16 @@ extension CicadaRootView {
                 } else {
                     if !vm.currentSession.notes.summary.isEmpty {
                         noteCard(title: "总结") {
-                            Text(vm.currentSession.notes.summary)
-                                .font(.system(size: 14))
-                                .foregroundStyle(CicadaPalette.ink)
-                                .lineSpacing(4)
+                            if isEditingNotes {
+                                TextEditor(text: $notesSummaryDraft)
+                                    .font(.system(size: 14))
+                                    .frame(minHeight: 90)
+                            } else {
+                                Text(vm.currentSession.notes.summary)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(CicadaPalette.ink)
+                                    .lineSpacing(4)
+                            }
                         }
                     }
                     if !vm.currentSession.notes.topics.isEmpty {
@@ -436,6 +555,80 @@ extension CicadaRootView {
                             SystemBroadcastButton()
                                 .frame(width: 38, height: 38)
                                 .background(RoundedRectangle(cornerRadius: 10).fill(CicadaPalette.ground))
+                        }
+                    }
+                }
+                noteCard(title: "纠偏与词表（双模式可选用）") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $vm.fixMisheard) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("会中改正听错的词（词表 / 上下文纠错）").font(.system(size: 13, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                                Text("按词表、上下文和同音关系修正错词并支持点选改回").font(.system(size: 11)).foregroundStyle(CicadaPalette.secondary)
+                            }
+                        }
+                        .tint(CicadaPalette.accent)
+                        Toggle(isOn: $vm.askNames) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("没见过的名字和专称先问我").font(.system(size: 13, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                                Text("关掉就只改词表里的词和有把握的同音错字").font(.system(size: 11)).foregroundStyle(CicadaPalette.secondary)
+                            }
+                        }
+                        .tint(CicadaPalette.accent).disabled(!vm.fixMisheard)
+                        Toggle(isOn: $vm.codeSwitchRefine) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("中英夹杂同音纠偏").font(.system(size: 13, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                                Text("自动修正音译英文词（如 派普兰→pipeline）与口癖并回写原文").font(.system(size: 11)).foregroundStyle(CicadaPalette.secondary)
+                            }
+                        }
+                        .tint(CicadaPalette.accent)
+                        Divider()
+                        HStack(spacing: 8) {
+                            TextField("正确写法 (如 Morpho)", text: $newWordDraft)
+                                .font(.system(size: 12)).padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(CicadaPalette.ground))
+                            TextField("常听错成 (可选)", text: $newHeardDraft)
+                                .font(.system(size: 12)).padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(CicadaPalette.ground))
+                            Button("添加") {
+                                vm.addVocabulary(word: newWordDraft, heard: newHeardDraft)
+                                newWordDraft = ""
+                                newHeardDraft = ""
+                            }
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 12).frame(height: 32)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(CicadaPalette.ink))
+                        }
+                        if !vm.vocabulary.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(vm.vocabulary) { term in
+                                        HStack(spacing: 4) {
+                                            Text(term.heard.isEmpty ? term.word : "\(term.word)←\(term.heard.joined(separator: "/"))")
+                                                .font(.system(size: 11)).foregroundStyle(CicadaPalette.ink)
+                                            Button { vm.removeVocabulary(word: term.word) } label: {
+                                                Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(CicadaPalette.tertiary)
+                                            }
+                                        }
+                                        .padding(.horizontal, 8).padding(.vertical, 4)
+                                        .background(Capsule().fill(CicadaPalette.ground))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !vm.speakerProfiles.isEmpty {
+                    noteCard(title: "跨会议声纹库（\(vm.speakerProfiles.count) 人）") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(vm.speakerProfiles) { p in
+                                HStack {
+                                    Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(CicadaPalette.ink)
+                                    Text("· \(p.sampleCount) 次记录").font(.system(size: 11)).foregroundStyle(CicadaPalette.tertiary)
+                                    Spacer()
+                                    Button("移除") { vm.deleteSpeakerProfile(p.id) }
+                                        .font(.system(size: 11)).foregroundStyle(CicadaPalette.accent)
+                                }
+                            }
                         }
                     }
                 }

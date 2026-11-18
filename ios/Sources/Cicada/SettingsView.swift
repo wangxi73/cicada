@@ -39,6 +39,16 @@ struct SettingsView: View {
                             .pickerStyle(.menu)
                             .tint(Ink.secondary)
                         }
+                        Hairline()
+                        NavigationLink { WordListPage(vocabulary: model.vocabulary) } label: {
+                            row(Text("词表")) {
+                                if !model.vocabulary.terms.isEmpty {
+                                    Text(verbatim: "\(model.vocabulary.terms.count)").foregroundStyle(Ink.secondary).monospacedDigit()
+                                }
+                                Chevron()
+                            }
+                        }
+                        .buttonStyle(RowPress())
                     }
                     SectionLabel(text: L("听对方"))
                     Card {
@@ -80,6 +90,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(Ink.ground)
+            .navigationDestination(isPresented: $model.showWordList) { WordListPage(vocabulary: model.vocabulary) }
             .toolbar(sheet ? .visible : .hidden, for: .navigationBar)
             .navigationTitle(sheet ? Text("设置") : Text(""))
             .navigationBarTitleDisplayMode(.inline)

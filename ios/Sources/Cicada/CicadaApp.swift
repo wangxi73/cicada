@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 @main
@@ -12,6 +13,9 @@ struct CicadaApp: App {
                 .environmentObject(model.notes)
                 .environmentObject(model.room)
                 .onOpenURL { model.open($0) }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    model.room.appBecameActive()
+                }
                 .modifier(DevWindow(model: model))
         }
     }
@@ -31,6 +35,13 @@ enum Pref {
     static let voices = "speakerVoices"
     /// 纪要语言: "mine" (the language meetings are translated into) or "source" (the meeting's own).
     static let notesLanguage = "notesLanguage"
+    /// 会中改正听错的词, and 没见过的名字和专称先问我.
+    static let fixMisheard = "fixMisheard"
+    static let askNames = "askNames"
+    static let codeSwitchRefine = "codeSwitchRefine"
+    /// 声音来源 (iOS only): "room", people at the table, or "speaker", video this phone plays aloud.
+    static let hear = "iosHear"
+    static var speakerMode: Bool { UserDefaults.standard.string(forKey: hear) == "speaker" }
 
     /// 对方说 on iOS: one language the user picks (detecting it comes later); the Mac's "auto" reads as English.
     static var sourceLang: Lang {
@@ -57,6 +68,13 @@ enum Pref {
     }
 }
 
+/// 改正听错的词's two switches, by the Mac's names (AppSettings).
+@MainActor
+final class FixPrefs: FixSwitches {
+    var fixMisheard: Bool { UserDefaults.standard.bool(forKey: Pref.fixMisheard) }
+    var askNames: Bool { UserDefaults.standard.bool(forKey: Pref.askNames) }
+}
+
 /// Wires the shared engines to the screens, like the Mac's AppModel. M1: the records, the key and
 /// their notes.
 @MainActor
@@ -68,10 +86,19 @@ final class AppModel: ObservableObject {
     lazy var room: RoomListen = {
         let r = RoomListen(store: store, translator: translator, notes: notes)
         r.onStateChange = { [weak self] in self?.listeningChanged() }
-        r.onLine = { [weak self] line in self?.liveActivity.update(line: line) }
+        r.onLine = { [weak self] line in self?.showOnLockScreen(line) }
+        // The floating window follows the 字幕 page: what is being said, else the newest line.
+        roomWatch = r.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.showInPiP() }
+        }
         return r
     }()
+    let pip = PiPSubtitles()
+    private var roomWatch: AnyCancellable?
     let liveActivity = LiveActivityController()
+    /// 词表 and 改正听错的词, the Mac's own engines.
+    let vocabulary = Vocabulary(url: Vocabulary.defaultURL)
+    lazy var fixes = makeFixes()
     /// 正在听's 字幕 / 纪要 switch, so a debug command can flip it.
     @Published var livePage: LivePage = .subtitles
     /// The record page's picked speaker (scheme A: only they are drawn in ink).
@@ -91,11 +118,21 @@ final class AppModel: ObservableObject {
     @Published var speakerUndo: SpeakerUndo?
     /// The speaker number whose 是谁 prompt is open on the record page.
     @Published var namingSpeaker: Int?
+    /// 改正听错的词: the line being rewritten (改这句…), the record line tapped open, and 设置 › 词表's
+    /// state (pushed, 粘贴导入's text, the word being edited, the word just deleted).
+    @Published var editingLine: LineEdit?
+    @Published var openLine: String?
+    @Published var showWordList = false
+    @Published var wordImport: String?
+    @Published var editingWord: String?
+    @Published var deletedWord: DeletedWord?
+    @Published var wordConflict: WordConflict?
     /// Dev only: the iPad window size `window:` lays the app out at (DevWindow in Debug.swift).
     @Published var devWindow: CGSize?
 
     init() {
-        UserDefaults.standard.register(defaults: [Pref.source: "en-US", Pref.voices: true, Pref.model: LingClient.models[0], Pref.notesLanguage: "mine"])
+        UserDefaults.standard.register(defaults: [Pref.source: "en-US", Pref.voices: true, Pref.model: LingClient.models[0], Pref.notesLanguage: "mine",
+                                                  Pref.fixMisheard: true, Pref.askNames: true, Pref.codeSwitchRefine: true])
         TranscriptExport.voices = UserDefaults.standard.bool(forKey: Pref.voices)
         // Ling only for now: the Mac's other services (AIProvider) come to iOS with their settings.
         ling.config = {
@@ -103,6 +140,7 @@ final class AppModel: ObservableObject {
                      textModel: UserDefaults.standard.string(forKey: Pref.model) ?? LingClient.models[0])
         }
         wireNotes()
+        wireFixes()
         #if targetEnvironment(simulator)
         HostRecognizer.install()
         #endif
@@ -118,13 +156,36 @@ final class AppModel: ObservableObject {
         selection = nil
         searchPath = []
         tab = .records
-        room.start(source: Pref.sourceLang.locale, target: Pref.targetCode, voices: UserDefaults.standard.bool(forKey: Pref.voices))
+        fixes.meetingStarted()
+        room.start(source: Pref.sourceLang.locale, target: Pref.targetCode, voices: UserDefaults.standard.bool(forKey: Pref.voices),
+                   speaker: Pref.speakerMode)
+    }
+
+    private func showInPiP() {
+        guard room.isRunning, room.speakerMode else { return }
+        let last = room.lines.last
+        let shown = last.flatMap { l in store.session(room.sessionID)?.lines.first { $0.id == l.id }?.shown } ?? last?.src
+        if room.paused || !room.status.isEmpty {
+            pip.show(src: "", dst: "", note: room.paused ? L("已暂停，结束后接着听") : room.status)
+        } else if !room.draft.isEmpty {
+            pip.show(src: room.draft, dst: room.draftTranslation, note: L("正在听外放…"))
+        } else {
+            pip.show(src: shown ?? "", dst: last?.dst ?? "", note: shown == nil ? L("正在听外放…") : "")
+        }
     }
 
     func stopListening() { room.stop() }
 
+    /// The Live Activity shows the line as fixed (改正听错的词), like the 字幕 page.
+    func showOnLockScreen(_ line: RoomListen.Line) {
+        var shown = line
+        if let rec = store.session(room.sessionID)?.lines.first(where: { $0.id == line.id }) { shown.src = rec.shown }
+        liveActivity.update(line: shown)
+    }
+
     private func listeningChanged() {
         objectWillChange.send()
+        pip.setEnabled(room.isRunning && room.speakerMode)
         if room.isRunning, let start = room.startedAt {
             liveActivity.start(startedAt: start, pair: Pref.pairText(room.languagePair.source, room.languagePair.target))
         } else if !room.isRunning {
@@ -137,6 +198,28 @@ final class AppModel: ObservableObject {
         guard ling.hasKey else { return }
         recordPage = .notes
         notes.generate(for: id)
+    }
+
+    /// Each finished sentence's translation also asks which words were misheard (Ling only); the
+    /// word list's known forms are fixed as soon as a line is written. As the Mac's AppModel.
+    func wireFixes() {
+        translator.fixContext = { [weak self] text in self?.fixes.context(for: text) }
+        translator.onFixes = { [weak self] text, edits in self?.fixes.received(text, edits) }
+        translator.useCodeSwitchRefine = { UserDefaults.standard.bool(forKey: Pref.codeSwitchRefine) }
+        room.onHeard = { [weak self] session, line in self?.fixes.applyKnown(lineID: line, in: session) }
+        room.onSourceRefined = { [weak self] session, line in self?.fixes.applyKnown(lineID: line, in: session) }
+    }
+
+    func makeFixes() -> LiveFixes {
+        let f = LiveFixes(store: store, vocabulary: vocabulary, settings: FixPrefs())
+        f.onChange = { [weak self] in self?.objectWillChange.send() }
+        // The lock screen follows a fix on the line it shows.
+        f.onLineFixed = { [weak self] session, line in
+            guard let self, session == self.room.sessionID, let last = self.room.lines.last, last.id == line.id else { return }
+            self.showOnLockScreen(last)
+        }
+        vocabulary.onChange = { [weak self] in self?.objectWillChange.send() }
+        return f
     }
 
     func wireNotes() {
@@ -169,6 +252,31 @@ final class AppModel: ObservableObject {
         if speakerUndo?.session == id { speakerUndo = nil }
         store.delete(id)
         debugLog("delete \(id) sessions=\(store.sessions.count)")
+    }
+
+    // MARK: 词表
+
+    /// Swiped away: 撤销 in its place for a few seconds, as on the Mac.
+    func deleteWord(_ t: Vocabulary.Term) {
+        let index = vocabulary.terms.firstIndex(of: t) ?? 0
+        vocabulary.remove(t.word)
+        let d = DeletedWord(term: t, index: index)
+        deletedWord = d
+        if editingWord == t.word { editingWord = nil }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            if self?.deletedWord == d { self?.deletedWord = nil }
+        }
+    }
+
+    /// A heard form typed on a word: added, or, when another word has it, asked about (改给 / 两个都留).
+    func addHeard(_ text: String, to t: Vocabulary.Term) {
+        let h = text.trimmingCharacters(in: .whitespaces)
+        guard !h.isEmpty, h.count <= 40 else { return }
+        if let owner = vocabulary.owners(ofHeard: h, except: t.word).first {
+            wordConflict = WordConflict(word: t.word, heard: h, owner: owner)
+        } else {
+            vocabulary.confirm(heard: h, word: t.word, source: t.source)
+        }
     }
 
     // MARK: Speakers (the Mac's AppModel.renameSpeaker / mergeSpeaker / undoSpeakerEdit)

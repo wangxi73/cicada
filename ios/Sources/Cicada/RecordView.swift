@@ -20,6 +20,7 @@ struct RecordView: View {
     @AppStorage(Pref.voices) private var voicesOn = true
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // The design's 28 pt title; the day is in the line below, so a notes title's
@@ -56,7 +57,15 @@ struct RecordView: View {
                     .padding(.top, 16)
 
                 switch model.recordPage {
-                case .transcript: TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil) { player.seek($0) }
+                case .transcript:
+                    // 改正听错的词 after the meeting: the waiting fixes, one at a time.
+                    if session.id != model.store.liveID {
+                        FixReviewBanner(fixes: model.fixes, session: session,
+                                        onShow: { id in withAnimation { proxy.scrollTo(id, anchor: .center) } },
+                                        onEdit: { l, start in model.editingLine = LineEdit(session: session.id, line: l.id, start: start) })
+                            .padding(.top, 14)
+                    }
+                    TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil) { player.seek($0) }
                 case .notes:
                     if notes.generatingID == session.id {
                         HStack(spacing: 10) {
@@ -76,6 +85,10 @@ struct RecordView: View {
             .padding(.bottom, player.available ? 110 : 40)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .debugScroll)) { n in
+            if let id = n.object as? String { proxy.scrollTo(id, anchor: .center) }
+        }
         }
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
@@ -106,11 +119,13 @@ struct RecordView: View {
             if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty, !player.available {
                 SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }.padding(.horizontal, 16).padding(.bottom, 8)
             }
+            if !player.available { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
             if player.available {
                 VStack(spacing: 8) {
                     if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty {
                         SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }
                     }
+                    FixToast(fixes: model.fixes)
                     PlayerBar(player: player)
                 }
                     .padding(.horizontal, 16)
@@ -124,8 +139,13 @@ struct RecordView: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: model.speakerUndo?.id)
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .sheet(item: Binding(get: { model.editingLine.flatMap { $0.session == session.id ? $0 : nil } },
+                             set: { model.editingLine = $0 })) { e in
+            LineEditorSheet(edit: e, fixes: model.fixes)
+        }
         .onAppear { player.load(store: model.store, session: session) }
-        .onChange(of: session.id) { titleDraft = nil; model.focusSpeaker = nil; player.load(store: model.store, session: session) }
+        .onChange(of: session.id) { titleDraft = nil; model.focusSpeaker = nil; model.openLine = nil; player.load(store: model.store, session: session) }
         .onDisappear { player.stop() }
         .onReceive(NotificationCenter.default.publisher(for: .debugPlay)) { n in
             if let t = n.object as? Double { player.seek(t) }
@@ -257,6 +277,7 @@ struct SpeakerUndoBar: View {
 }
 
 struct TranscriptList: View {
+    @EnvironmentObject var model: AppModel
     let session: Session
     /// The line the recording is at, highlighted like the design's.
     let playing: String?
@@ -290,13 +311,35 @@ struct TranscriptList: View {
                                     .foregroundStyle(l.speaker == "me" ? Ink.accentText : (focus == nil || mine ? Ink.ink : Ink.tertiary))
                             }
                         }
-                        Text(l.src).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
-                        if let d = l.dst, d != l.src {
+                        Text(FixedText.attributed(l)).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
+                        if let d = l.dst, d != l.src, d != l.shown {
                             Text(d).font(.system(size: dstSize)).foregroundStyle(Ink.ink).lineSpacing(4)
+                        }
+                        // Tapped open: what its fixed words were heard as, 改回, and 改这句….
+                        if model.openLine == l.id {
+                            FixedWords(line: l, onRevert: { f in model.fixes.revert(f, lineID: l.id, in: session.id) },
+                                       onEdit: { edit(l) })
                         }
                     }
                 }
-                .textSelection(.enabled)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.snappy(duration: 0.2)) { model.openLine = model.openLine == l.id ? nil : l.id } }
+                // Held: the same, and 拷贝 (a long press here can't also select text).
+                .contextMenu {
+                    Button { edit(l) } label: { Label("改这句…", systemImage: "pencil") }
+                    ForEach(Array(FixedText.applied(l).enumerated()), id: \.offset) { _, f in
+                        let c = Correction.core(f.from, f.to)
+                        Section {
+                            Button { model.fixes.revert(f, lineID: l.id, in: session.id) } label: { Label("改回", systemImage: "arrow.uturn.backward") }
+                        } header: {
+                            Text("听成") + Text(verbatim: " \(c.from) → \(c.to)")
+                        }
+                    }
+                    Button {
+                        UIPasteboard.general.string = [l.shown, l.dst].compactMap { $0 }.joined(separator: "\n")
+                    } label: { Label("拷贝", systemImage: "doc.on.doc") }
+                }
+                .id(l.id)
                 .opacity(dimOthers && !mine ? 0.4 : 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 14)
@@ -317,6 +360,10 @@ struct TranscriptList: View {
         .overlay {
             if session.lines.isEmpty { Text("还没有句子").foregroundStyle(Ink.secondary).padding(.top, 40) }
         }
+    }
+
+    private func edit(_ l: TranscriptLine) {
+        model.editingLine = LineEdit(session: session.id, line: l.id, start: l.shown)
     }
 
     /// The time; with a recording it plays from that line.
@@ -534,4 +581,6 @@ struct PlayerBar: View {
 extension Notification.Name {
     /// Debug `play:<seconds>`: the open record plays from there.
     static let debugPlay = Notification.Name("cicada.debugPlay")
+    /// Debug `scrollTo:<line id>`: the open record scrolls there.
+    static let debugScroll = Notification.Name("cicada.debugScroll")
 }

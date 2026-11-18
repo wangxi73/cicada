@@ -32,10 +32,10 @@ cp -R "$APP/zh-Hans.lproj" "$APP/zh-Hant.lproj"
 cp Resources/sample/sample.m4a "$APP/"
 # 说话人识别's voiceprint model, compiled on first use as on the Mac (SpeakerID.swift).
 cp -R Resources/models/SpeakerEmbedding.mlpackage "$APP/"
-# The logo on the 听会议室 card: the Mac's own icon renderer (Sources/LiveSubsIcon), not a fourth
+# The logo on the 听会议室 card: the Mac's own icon renderer (Sources/CicadaIcon), not a fourth
 # copy of the geometry. It is a host tool, built once.
-ICON_TOOL=.build/release/LiveSubsIcon
-[[ -x $ICON_TOOL ]] || swift build -c release --product LiveSubsIcon >/dev/null
+ICON_TOOL=.build/release/CicadaIcon
+[[ -x $ICON_TOOL ]] || swift build -c release --product CicadaIcon >/dev/null
 ICONS=$(mktemp -d)
 "$ICON_TOOL" "$ICONS/logo.iconset" >/dev/null
 cp "$ICONS/logo.iconset/icon_128x128@2x.png" "$APP/logo.png"

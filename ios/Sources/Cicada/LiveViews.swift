@@ -25,7 +25,8 @@ struct HomeTitle: View {
                         .font(.footnote.weight(.semibold).monospacedDigit())
                         .foregroundStyle(Ink.accentText)
                     }
-                    Text(L("会议室 · \(Pref.pairText(room.languagePair.source, room.languagePair.target))"))
+                    let pair = Pref.pairText(room.languagePair.source, room.languagePair.target)
+                    Text(room.speakerMode ? L("外放 · \(pair)") : L("会议室 · \(pair)"))
                         .font(.system(size: titleSize - 4, weight: .bold)).foregroundStyle(Ink.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
@@ -58,6 +59,7 @@ struct ListenBar: View {
     @EnvironmentObject var room: RoomListen
     @AppStorage(Pref.source) private var source = "en-US"
     @AppStorage(Pref.target) private var target = "system"
+    @AppStorage(Pref.hear) private var hear = "room"
     /// Glass on the ground (iPhone); white on the iPad's glass sidebar.
     var onGlass = false
 
@@ -80,6 +82,15 @@ struct ListenBar: View {
             Text("开始听").font(.headline).foregroundStyle(Ink.ink).padding(.leading, 18)
             Rectangle().fill(Ink.line).frame(width: 1, height: 20)
             Menu {
+                Section {
+                    Picker(selection: $hear) {
+                        Text("会议室").tag("room")
+                        Text("手机外放").tag("speaker")
+                    } label: { Text("声音来源") }
+                    .pickerStyle(.inline)
+                    // The one grey line: what 手机外放 needs, else what iPhone can't hear at all.
+                    Text(hear == "speaker" ? L("别戴耳机，字幕会浮在小窗里") : L("听不到其他 app 的声音，线上会议请用电脑版"))
+                }
                 Picker(selection: $source) {
                     ForEach(sourceLanguages, id: \.locale) { Text(Pref.name(of: $0)).tag($0.locale) }
                 } label: { Text("对方说") }
@@ -88,7 +99,7 @@ struct ListenBar: View {
                     ForEach(targetLanguages, id: \.code) { Text($0.name).tag($0.code) }
                 } label: { Text("翻译成") }
             } label: {
-                Text(verbatim: "\(Pref.sourceName) → \(targetName(Pref.targetCode))")
+                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.targetCode))")
                     .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 44)
@@ -167,6 +178,7 @@ struct LivePhone: View {
                 HomeTitle()
                 ListenBar()
                 PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)])
+                if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
@@ -176,7 +188,10 @@ struct LivePhone: View {
                 ScrollView { NotesPage(notes: notes.notes).padding(20) }
             }
         }
+        .background(alignment: .topLeading) { PiPHost(pip: model.pip).frame(width: 4, height: 4) }
         .background(Ink.ground)
+        .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
         .onChange(of: model.livePage) { page = model.livePage }
     }
 
@@ -207,11 +222,14 @@ struct LiveLines: View {
                             .frame(maxWidth: .infinity).padding(.top, 40)
                     }
                     ForEach(room.lines) { l in
-                        card(who: numbers[l.id].map { SpeakerLabels.label($0, names) }, time: l.t, src: l.src, dst: l.dst, live: false)
+                        // The record's line, so its fixed words show (改正听错的词); `room.lines` keeps what was heard.
+                        let rec = session?.lines.first { $0.id == l.id }
+                        card(who: numbers[l.id].map { SpeakerLabels.label($0, names) }, time: l.t,
+                             src: rec.map(FixedText.attributed) ?? AttributedString(l.src), dst: l.dst, live: false)
                             .id(l.id)
                     }
                     if !room.draft.isEmpty {
-                        card(who: nil, time: nil, src: room.draft, dst: room.draftTranslation.isEmpty ? nil : room.draftTranslation, live: true)
+                        card(who: nil, time: nil, src: AttributedString(room.draft), dst: room.draftTranslation.isEmpty ? nil : room.draftTranslation, live: true)
                             .id("draft")
                     }
                     Color.clear.frame(height: 40).id("end")
@@ -223,7 +241,7 @@ struct LiveLines: View {
         }
     }
 
-    private func card(who: String?, time: Double?, src: String, dst: String?, live: Bool) -> some View {
+    private func card(who: String?, time: Double?, src: AttributedString, dst: String?, live: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(live ? L("正在说") : [who, time.map(TranscriptExport.clock)].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption.weight(.semibold)).foregroundStyle(live ? Ink.accentText : Ink.ink)
@@ -247,6 +265,10 @@ struct LivePad: View {
     @State private var page: LivePage = .subtitles
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let id = room.sessionID {
+                FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            }
         GeometryReader { g in
             if g.size.width >= 820 {
                 HStack(alignment: .top, spacing: 22) {
@@ -270,7 +292,12 @@ struct LivePad: View {
                 .padding(.horizontal, 20).padding(.top, 18)
             }
         }
+        }
+        .background(alignment: .topLeading) { PiPHost(pip: model.pip).frame(width: 4, height: 4) }
         .background(Ink.ground)
+        .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).frame(maxWidth: 560).padding(.horizontal, 20).padding(.bottom, 12) }
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .animation(.snappy(duration: 0.2), value: model.fixes.asking(in: room.sessionID ?? "")?.fix)
         .onChange(of: model.livePage) { page = model.livePage }
     }
 

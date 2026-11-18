@@ -91,7 +91,7 @@ jobs:
           windows/build/tests/Cicada.Tests.exe
       - name: Translations
         run: python windows/scripts/strings.py
-      - name: Build and zip
+      - name: Build
         shell: pwsh
         run: |
           $v = "$env:TAG".TrimStart("v")
@@ -100,17 +100,16 @@ jobs:
             $out = "windows/build/Cicada-$($pair[0])"
             dotnet publish windows/src/Cicada -c Release -r $pair[0] -o $out -p:DebugType=embedded
             if ($LASTEXITCODE -ne 0) { exit 1 }
-            # The zip stays: older Cicadas only look for it when checking for updates.
-            Compress-Archive -Path "$out/*" -DestinationPath "dist/Cicada-$v-Windows-$($pair[1]).zip"
-            # The download for people: the same exe, which installs itself (Install.cs).
+            # The download: the app's exe, which installs itself (Install.cs) and is what updates fetch.
+            Copy-Item "$out/Cicada.exe" "dist/Cicada-$v-Windows-$($pair[1]).exe"
+            # The same exe under 1.1.0's names: Cicada 1.1.0 only looks for these when checking for
+            # updates. Drop once few people are left on 1.1.0.
             Copy-Item "$out/Cicada.exe" "dist/Cicada-Setup$(if ($pair[1] -eq 'ARM64') { '-arm64' }).exe"
           }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: |
-            dist/*.zip
-            dist/*.exe
+          path: dist/*.exe
 
   # The voiceprint library (说话人识别) for each architecture, on 22.04 so it loads on 22.04 and 24.04.
   linux-native:
@@ -200,6 +199,9 @@ jobs:
           gradle --console=plain -q :cli:installDist
           JAVA_OPTS="-Dcicada.resources=$PWD/../Resources -Dcicada.androidStrings=$PWD/app/src/main/strings" cli/build/install/cicada-cli/bin/cicada-cli test
           python3 scripts/strings.py
+      # 说话人识别's voiceprint library: the NDK app/build.gradle.kts pins (sdkmanager checks it).
+      - name: NDK
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.14206865" > /dev/null
       - name: Build and sign
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

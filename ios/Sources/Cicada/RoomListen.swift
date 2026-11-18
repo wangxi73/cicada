@@ -26,9 +26,21 @@ final class RoomListen: ObservableObject {
     @Published private(set) var level: Float = 0
     @Published private(set) var status = ""
     @Published private(set) var sessionID: String?
+    /// 手机外放: a video app plays aloud while we listen from the background, so its audio keeps
+    /// playing beside ours and the subtitles go to the picture-in-picture window (PiPSubtitles).
+    @Published private(set) var speakerMode = false
+    /// A call, Siri or another app took the audio: the microphone is off until it ends.
+    @Published private(set) var paused = false
 
     /// Every finished line, for the Live Activity.
     var onLine: ((Line) -> Void)?
+    /// A line was written or its words changed (a joined sentence): the word list's known
+    /// misheard forms are fixed at once (`LiveFixes.applyKnown`).
+    var onHeard: ((_ session: String, _ lineID: String) -> Void)?
+    var onSourceRefined: ((_ session: String, _ lineID: String) -> Void)?
+    /// Debug (`silentListen`): a meeting with no microphone and no recognizer, fed by `heard:`.
+    static var silent = false
+    private var silentClock = 0.0
     var onStateChange: (() -> Void)?
 
     private let store: SessionStore
@@ -67,8 +79,10 @@ final class RoomListen: ObservableObject {
     var elapsed: TimeInterval { startedAt.map { Date().timeIntervalSince($0) } ?? 0 }
     var languagePair: (source: String, target: String) { (lang.code, target) }
 
-    func start(source: String, target: String, voices: Bool) {
+    func start(source: String, target: String, voices: Bool, speaker: Bool = false) {
         guard !isRunning else { return }
+        speakerMode = speaker
+        paused = false
         lang = sourceLanguages.first { $0.locale == source } ?? sourceLanguages[0]
         self.target = target
         status = L("正在准备…")
@@ -88,6 +102,17 @@ final class RoomListen: ObservableObject {
         last = nil
         counter = 0
         speakers.reset()
+        if Self.silent {
+            let s = store.begin()
+            store.markLiveInRoom()
+            sessionID = s.id
+            startedAt = s.startedAt
+            notes.begin(s.id)
+            status = ""
+            debugLog("room: listening silent (debug), no audio, session=\(s.id)")
+            onStateChange?()
+            return
+        }
         guard await AVAudioApplication.requestRecordPermission() else {
             fail(L("请在设置里允许知了使用麦克风"))
             return
@@ -101,16 +126,23 @@ final class RoomListen: ObservableObject {
             guard isRunning else { await stream.cancel(); return }
             self.stream = stream
             let s = store.begin()
-            store.markLiveInRoom()
+            // Video played aloud is what the computer plays, not people in the room (the Mac's 会议室 tag).
+            if !speakerMode { store.markLiveInRoom() }
             sessionID = s.id
             startedAt = s.startedAt
             notes.begin(s.id)
             audio.voices = voices
+            audio.mix = speakerMode
+            audio.onInterruption = { [weak self] began in self?.interrupted(began) }
             try audio.start(recognizer: stream, recording: AudioFileWriter.partial(store.systemAudioURL(s.id)))
             heardVoice = false
             audio.onLevel = { [weak self] v in
-                self?.level = v
-                if v > 0.55 { self?.heardVoice = true }
+                guard let self, !self.paused else { return }
+                self.level = v
+                if v > 0.55 {
+                    self.heardVoice = true
+                    if self.status == L("没听到声音，请拔掉耳机或调大音量") { self.status = "" }
+                }
             }
             reader = Task { [weak self] in
                 do {
@@ -124,13 +156,64 @@ final class RoomListen: ObservableObject {
                 }
             }
             status = ""
-            debugLog("room: listening locale=\(lang.locale) target=\(target) format=\(stream.format) session=\(s.id)")
+            if speakerMode { watchSilence(s.id) }
+            debugLog("room: listening locale=\(lang.locale) target=\(target) speaker=\(speakerMode) format=\(stream.format) session=\(s.id)")
             onStateChange?()
         } catch {
             debugLog("room: start failed: \(error)")
             fail(Recognition.needsUser(error) ? error.localizedDescription : L("没能下载 \(lang.name) 语音模型"))
         }
     }
+
+    /// Paused while the audio is taken, then on again by itself; if the system won't give the
+    /// microphone back yet (the app is still behind a call screen), again when the app comes back.
+    private func interrupted(_ began: Bool) {
+        guard isRunning else { return }
+        if began {
+            guard !paused else { return }
+            paused = true
+            level = 0
+            status = L("已暂停，结束后接着听")
+            debugLog("room: interrupted")
+            return
+        }
+        guard paused else { return }
+        do {
+            try audio.resume()
+            paused = false
+            status = L("继续听")
+            debugLog("room: resumed")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                if self?.status == L("继续听") { self?.status = "" }
+            }
+        } catch {
+            debugLog("room: resume failed: \(error)")
+            resumeWhenActive = true
+        }
+        onStateChange?()
+    }
+
+    private var resumeWhenActive = false
+
+    /// The app is in front again: a pause whose end came too early to take the microphone back.
+    func appBecameActive() {
+        guard resumeWhenActive, isRunning, paused else { return }
+        resumeWhenActive = false
+        interrupted(false)
+    }
+
+    /// 手机外放 with nothing loud enough after ten seconds: most likely headphones or a low volume.
+    private func watchSilence(_ id: String) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard let self, self.isRunning, self.sessionID == id, !self.paused,
+                  !self.heardVoice, self.lines.isEmpty, self.status.isEmpty else { return }
+            self.status = L("没听到声音，请拔掉耳机或调大音量")
+        }
+    }
+
+    /// Debug (`interrupt:began|ended`): what the system sends for a call or Siri.
+    func debugInterrupt(_ began: Bool) { audio.debugInterrupt(began) }
 
     private func fail(_ message: String) {
         status = message
@@ -141,7 +224,9 @@ final class RoomListen: ObservableObject {
     func stop() {
         guard isRunning else { return }
         isRunning = false
-        audio.stop()
+        paused = false
+        resumeWhenActive = false
+        if !Self.silent { audio.stop() }
         let stream = self.stream, reader = self.reader
         self.stream = nil
         self.reader = nil
@@ -182,6 +267,7 @@ final class RoomListen: ObservableObject {
             last = (prev.id, joined, piece.end)
             store.setSource(lineID: prev.id, joined)
             if let i = lines.firstIndex(where: { $0.id == prev.id }) { lines[i].src = joined }
+            if let sid = sessionID { onHeard?(sid, prev.id) }
             translate(prev.id, joined)
             return
         }
@@ -192,12 +278,23 @@ final class RoomListen: ObservableObject {
         store.append(TranscriptLine(id: id, t: t, speaker: "them", src: final, dst: nil,
                                     srcLang: lang.code, dstLang: target))
         lines.append(Line(id: id, src: final, dst: nil, voice: nil, t: t))
+        if let sid = sessionID { onHeard?(sid, id) }
         if lines.count > 60 { lines.removeFirst(lines.count - 60) }
         last = (id, final, piece.end)
         if let samples = audio.voiceSamples(from: piece.start, to: piece.end) {
             speakers.tag(lineID: id, samples: samples)
         }
         translate(id, final)
+    }
+
+    /// Debug (`heard:<text>`): a finished sentence as if the recognizer gave it, in a silent meeting.
+    /// The record, its translation and fixes, and the 字幕 page all follow.
+    func debugHeard(_ text: String) {
+        guard isRunning, Self.silent, sessionID != nil else { return }
+        // Half a minute apart, so two lines are never joined as one sentence a pause cut.
+        silentClock += 30
+        let at = silentClock
+        handle(Recognition.Piece(text: text, isFinal: true, start: at, end: at + 2, confidence: nil))
     }
 
     /// `retry`: every provider failed before (Ling busy while Google answers 429): asked again a
@@ -215,6 +312,12 @@ final class RoomListen: ObservableObject {
             }
             // Joined meanwhile: only the whole sentence's translation counts.
             guard let i = lines.firstIndex(where: { $0.id == id }), lines[i].src == text else { return }
+            let refined = translator.refinedSourceByText.removeValue(forKey: text)
+            if let refined, !refined.isEmpty, refined != text {
+                lines[i].src = refined
+                store.setSource(lineID: id, refined)
+                if let sid = sessionID { onSourceRefined?(sid, id) }
+            }
             lines[i].dst = out
             store.setTranslation(lineID: id, out)
             contentLog("TRANSLATE [\(source)→\(target)] \(text) => \(out)")
@@ -239,7 +342,14 @@ final class RoomListen: ObservableObject {
 /// the meeting's recording, a level and the last minute of 16 kHz audio for voiceprints.
 final class RoomAudio: @unchecked Sendable {
     var voices = true
+    /// 手机外放: other apps keep playing beside us (without it, starting stops their audio).
+    var mix = false
     var onLevel: (@MainActor (Float) -> Void)?
+    /// true when a call, Siri or another app takes the audio, false when it gives it back.
+    var onInterruption: (@MainActor (Bool) -> Void)?
+    private var observers: [NSObjectProtocol] = []
+    /// Inside an interruption: a configuration change then must not take the microphone back.
+    private var held = false
 
     /// A new engine for each meeting: one restarted after `stop` hears only silence in the simulator.
     private var engine = AVAudioEngine()
@@ -261,7 +371,8 @@ final class RoomAudio: @unchecked Sendable {
     func start(recognizer: RecognitionStream, recording: URL) throws {
         let session = AVAudioSession.sharedInstance()
         // .measurement: no voice processing, which would duck what the room says as "echo".
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
+        // .defaultToSpeaker sends every app's sound to the speaker, not the earpiece, while we record.
+        try session.setCategory(.playAndRecord, mode: .measurement, options: mix ? [.defaultToSpeaker, .mixWithOthers] : [.defaultToSpeaker])
         try session.setActive(true)
         engine = AVAudioEngine()
         queue.sync {
@@ -271,9 +382,15 @@ final class RoomAudio: @unchecked Sendable {
             ring = []
             ringStart = 0
         }
+        try tapAndStart()
+        observe(session)
+    }
+
+    private func tapAndStart() throws {
         let input = engine.inputNode
+        input.removeTap(onBus: 0)
         let format = input.outputFormat(forBus: 0)
-        debugLog("room: input \(format) route=\(session.currentRoute.inputs.map(\.portName))")
+        debugLog("room: input \(format) route=\(AVAudioSession.sharedInstance().currentRoute.inputs.map(\.portName))")
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             guard let self, let copy = buffer.copy() as? AVAudioPCMBuffer else { return }
             self.queue.async { self.feed(copy) }
@@ -282,7 +399,42 @@ final class RoomAudio: @unchecked Sendable {
         try engine.start()
     }
 
+    /// The microphone again after an interruption, in whatever format the route now has.
+    func resume() throws {
+        held = false
+        try AVAudioSession.sharedInstance().setActive(true)
+        if !engine.isRunning { try tapAndStart() }
+    }
+
+    private func observe(_ session: AVAudioSession) {
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { [weak self] n in
+                guard let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+                let began = type == .began
+                self?.held = began
+                if began { self?.engine.pause() }
+                let cb = self?.onInterruption
+                MainActor.assumeIsolated { cb?(began) }
+            },
+            // A route change (headphones in or out) stops the engine: on again in the new format.
+            center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+                guard let self, !self.held, !self.engine.isRunning else { return }
+                debugLog("room: engine configuration changed")
+                try? self.tapAndStart()
+            },
+        ]
+    }
+
+    func debugInterrupt(_ began: Bool) {
+        NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(),
+                                        userInfo: [AVAudioSessionInterruptionTypeKey: (began ? AVAudioSession.InterruptionType.began : .ended).rawValue])
+    }
+
     func stop() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         queue.sync {

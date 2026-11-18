@@ -122,27 +122,50 @@ struct MobileVoiceClusterer {
     static let join: Float = 0.50
     static let startNew: Float = 0.50
     private(set) var sums: [[Float]] = []
+    private(set) var counts: [Int] = []
 
-    mutating func reset() { sums.removeAll() }
+    mutating func reset() {
+        sums.removeAll()
+        counts.removeAll()
+    }
+
+    static func cosine(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count, !a.isEmpty else { return -1 }
+        var dot: Float = 0, sqA: Float = 0, sqB: Float = 0
+        vDSP_dotpr(a, 1, b, 1, &dot, vDSP_Length(a.count))
+        vDSP_svesq(a, 1, &sqA, vDSP_Length(a.count))
+        vDSP_svesq(b, 1, &sqB, vDSP_Length(b.count))
+        return dot / max(sqA.squareRoot() * sqB.squareRoot(), .ulpOfOne)
+    }
 
     mutating func label(_ v: [Float], seconds: Double) -> Int? {
         var best = -1, bestSim: Float = -1
         for (i, s) in sums.enumerated() {
-            var dot: Float = 0, sq: Float = 0
-            vDSP_dotpr(v, 1, s, 1, &dot, vDSP_Length(v.count))
-            vDSP_svesq(s, 1, &sq, vDSP_Length(s.count))
-            let sim = dot / max(sq.squareRoot(), .ulpOfOne)
+            let sim = Self.cosine(v, s)
             if sim > bestSim { bestSim = sim; best = i }
         }
         if best >= 0, bestSim >= Self.join {
             vDSP_vadd(sums[best], 1, v, 1, &sums[best], 1, vDSP_Length(v.count))
+            counts[best] += 1
             return best + 1
         }
         if seconds >= Self.newSeconds, sums.isEmpty || bestSim < Self.startNew {
             sums.append(v)
+            counts.append(1)
             return sums.count
         }
         return best >= 0 ? (best + 1) : nil
+    }
+
+    func centroid(forSpeaker num: Int) -> [Float]? {
+        let idx = num - 1
+        guard idx >= 0, idx < sums.count else { return nil }
+        var out = sums[idx]
+        var sq: Float = 0
+        vDSP_svesq(out, 1, &sq, vDSP_Length(out.count))
+        guard sq > 0 else { return nil }
+        vDSP_vsdiv(out, 1, [sq.squareRoot()], &out, 1, vDSP_Length(out.count))
+        return out
     }
 }
 
@@ -152,9 +175,26 @@ final class MobileSpeakerTagger {
     private nonisolated(unsafe) var model: MobileVoiceprints?
     private nonisolated(unsafe) var loadFailed = false
     private nonisolated(unsafe) var clusterer = MobileVoiceClusterer()
+    private nonisolated(unsafe) var savedProfiles: [SpeakerProfileItem] = []
+    private nonisolated(unsafe) var matchedNameBySpeaker: [Int: String] = [:]
 
     func reset() {
-        queue.async { [self] in clusterer.reset() }
+        queue.async { [self] in
+            clusterer.reset()
+            matchedNameBySpeaker.removeAll()
+        }
+    }
+
+    func setSavedProfiles(_ profiles: [SpeakerProfileItem]) {
+        queue.async { [self] in savedProfiles = profiles }
+    }
+
+    func centroid(for label: String, completion: @escaping @MainActor ([Float]?) -> Void) {
+        let num = Int(label.replacingOccurrences(of: "说话人 ", with: "")) ?? -1
+        queue.async { [self] in
+            let c = clusterer.centroid(forSpeaker: num)
+            Task { @MainActor in completion(c) }
+        }
     }
 
     func identify(samples16k: [Int16], completion: @escaping @MainActor (String) -> Void) {
@@ -169,8 +209,21 @@ final class MobileSpeakerTagger {
                 Task { @MainActor in completion("会场") }
                 return
             }
+            if matchedNameBySpeaker[speakerNum] == nil, !savedProfiles.isEmpty {
+                var bestName: String?
+                var bestSim: Float = 0.62
+                for p in savedProfiles {
+                    let sim = MobileVoiceClusterer.cosine(v, p.centroid)
+                    if sim > bestSim {
+                        bestSim = sim
+                        bestName = p.name
+                    }
+                }
+                if let bestName { matchedNameBySpeaker[speakerNum] = bestName }
+            }
+            let resolved = matchedNameBySpeaker[speakerNum] ?? "说话人 \(speakerNum)"
             Task { @MainActor in
-                completion("说话人 \(speakerNum)")
+                completion(resolved)
             }
         }
     }
